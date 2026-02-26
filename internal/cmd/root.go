@@ -22,7 +22,6 @@ var versionCmd = &cobra.Command{
 	},
 }
 
-
 var devCmd = &cobra.Command{
 	Use:   "dev",
 	Short: "启动开发服务器（Air + Vite）",
@@ -75,20 +74,9 @@ var registryCmd = &cobra.Command{
 }
 
 func init() {
-	uiCmd.AddCommand(&cobra.Command{
-		Use: "add <asset>[@version]", Short: "安装 UI 资产",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("ui add: not yet implemented")
-			return nil
-		},
-	})
-	uiCmd.AddCommand(&cobra.Command{
-		Use: "list", Short: "列出已安装 UI 资产",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("ui list: not yet implemented")
-			return nil
-		},
-	})
+	// UI subcommands
+	uiCmd.AddCommand(newUIAddCmd())
+	uiCmd.AddCommand(newUIListCmd())
 	uiCmd.AddCommand(&cobra.Command{
 		Use: "sync [asset]", Short: "同步 UI 资产",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -104,6 +92,7 @@ func init() {
 		},
 	})
 
+	// API subcommands (still placeholders)
 	apiCmd.AddCommand(&cobra.Command{
 		Use: "add <project>/<resource>[@version]", Short: "安装 API 契约",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -119,13 +108,8 @@ func init() {
 		},
 	})
 
-	registryCmd.AddCommand(&cobra.Command{
-		Use: "build", Short: "构建 registry.json",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("registry build: not yet implemented")
-			return nil
-		},
-	})
+	// Registry subcommands
+	registryCmd.AddCommand(newRegistryBuildCmd())
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(newInitCmd())
@@ -133,6 +117,7 @@ func init() {
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(uiCmd)
 	rootCmd.AddCommand(apiCmd)
+	rootCmd.AddCommand(newSyncCmd())
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(registryCmd)

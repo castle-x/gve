@@ -1,0 +1,17 @@
+BINARY := {{.ProjectName}}
+
+.PHONY: dev build build-web build-backend clean
+
+dev:
+	@echo "Use 'gve dev' to start development server"
+
+build: build-web build-backend
+
+build-web:
+	cd site && pnpm install && pnpm build
+
+build-backend:
+	go build -o dist/$(BINARY) ./cmd/server
+
+clean:
+	rm -rf dist/ site/dist/

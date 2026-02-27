@@ -1,77 +1,138 @@
 # gve
 
-**GVE** (Go + Vite + Embed) 是一个全栈项目脚手架 CLI，用于管理 Go 后端 + Vite 前端的一体化项目，并通过 Go `embed` 将前端打包进单一二进制文件。
+A single CLI that scaffolds, develops, builds, and ships Go + Vite projects as one self-contained binary — frontend embedded via `go:embed`, no nginx or separate static hosting needed.
 
-## 功能
+## About
 
-- `gve init` — 初始化项目（Go 骨架 + 前端框架）
-- `gve dev` — 并发启动 Go 后端（Air 热重载）和 Vite 开发服务器
-- `gve build` — 构建嵌入前端的单二进制文件，支持交叉编译
-- `gve run` — 后台运行服务，支持 stop / restart / status / logs
-- `gve ui add/sync/diff/list` — UI 组件资产管理（基于 wk-ui）
-- `gve api add/sync` — API 契约管理（基于 wk-api）
-- `gve sync` — 团队协作：按 gve.lock 还原所有资产
-- `gve status` — 查看资产版本与可用更新
-- `gve doctor` — 检查开发环境依赖
+Full-stack Go projects typically require juggling separate frontend and backend toolchains, deployment configs, and asset management. **gve** collapses that into one workflow: `init` a project, `add` UI components and API contracts from shared asset libraries, `dev` with hot-reload for both Go and Vite, then `build` a single binary that serves everything.
 
-## 安装
+Two companion asset libraries keep teams consistent:
 
-**环境要求**：Go 1.22+
+| Repository | Purpose |
+|---|---|
+| [wk-ui](https://github.com/castle-x/wk-ui) | Shared UI components (React + Tailwind wrappers around Radix UI) |
+| [wk-api](https://github.com/castle-x/wk-api) | Shared API contracts (Thrift IDL + pre-generated Go/TypeScript clients) |
+
+## Features
+
+- **Project scaffolding** — `gve init` generates a Go backend + React/Vite frontend with sane defaults
+- **UI asset management** — install, diff, sync, and upgrade shared UI components across projects
+- **API contract management** — pull pre-generated Thrift clients (Go + TypeScript) without local toolchains
+- **One-command dev** — `gve dev` runs Go (with Air hot-reload) and Vite concurrently, prefixed output
+- **Single-binary build** — `gve build` compiles frontend into Go via `embed`, supports cross-compilation
+- **Background service** — `gve run` with smart rebuild, PID management, and daily log rotation
+- **Team sync** — `gve.lock` tracks asset versions; `gve sync` restores them on `git pull`
+- **Environment check** — `gve doctor` verifies Go, Node, pnpm, Git, and Air
+
+## Installation
+
+**Requires:** Go 1.22+
 
 ```bash
 go install github.com/castle-x/gve/cmd/gve@latest
 ```
 
-验证安装：
+Verify:
 
 ```bash
 gve version
 gve doctor
 ```
 
-## 快速上手
+## Quick Start
 
 ```bash
-# 初始化新项目
-gve init my-app
-cd my-app
+gve init my-app && cd my-app
 
-# 安装前端依赖
+# Install frontend dependencies
 cd site && pnpm install && cd ..
 
-# 启动开发服务器
-gve dev
-
-# 安装 UI 组件
+# Add a UI component and an API contract
 gve ui add button
-
-# 安装 API 契约
 gve api add example-project/user@v1
 
-# 构建单二进制
+# Start developing
+gve dev
+# [go]   Server starting on :8080
+# [vite] Local: http://localhost:5173
+
+# Build a single binary
 gve build
+./dist/my-app
 ```
 
-## 配套资产库
+## Usage
 
-| 仓库 | 说明 |
-|------|------|
-| [castle-x/wk-ui](https://github.com/castle-x/wk-ui) | UI 组件资产库（React + Tailwind） |
-| [castle-x/wk-api](https://github.com/castle-x/wk-api) | API 契约库（Thrift + 生成代码） |
+### Project Lifecycle
 
-## Cursor Skill
+```bash
+gve init <name>          # Scaffold project
+gve dev                  # Go + Vite hot-reload
+gve build [--os --arch]  # Single binary (cross-compile)
+gve run                  # Background with log rotation
+gve run stop|restart|status|logs
+```
 
-本仓库附带 GVE 使用指南 Skill，安装后 Cursor Agent 能自动掌握 GVE 的命令、目录约定和工作流：
+### Asset Management
+
+```bash
+gve ui add <asset>[@ver]                    # Install UI component
+gve ui list                                 # List installed assets
+gve ui diff <asset>                         # Local changes vs. library
+gve ui sync [asset]                         # Upgrade with conflict detection
+
+gve api add <project>/<resource>[@ver]      # Install API contract
+gve api sync                                # Upgrade API contracts
+
+gve sync                                    # Restore all from gve.lock
+gve status                                  # Show available updates
+```
+
+### Asset Library Maintenance
+
+```bash
+# Inside wk-ui or wk-api repository
+gve registry build       # Scan assets/ → generate registry.json
+```
+
+## Project Structure
+
+After `gve init my-app`:
+
+```
+my-app/
+├── cmd/server/main.go        # Go entry point
+├── internal/                  # Business logic
+├── api/                       # API contracts (gve api add)
+├── site/                      # Frontend (React + Vite)
+│   ├── embed.go               # go:embed all:dist
+│   ├── package.json
+│   ├── src/
+│   │   ├── app/               # Routes, providers, styles
+│   │   ├── views/             # Pages
+│   │   └── shared/ui/         # UI assets (gve ui add)
+│   └── ...
+├── gve.lock                   # Asset version lock (commit this)
+└── Makefile
+```
+
+## Contributing
+
+```bash
+git clone git@github.com:castle-x/gve.git
+cd gve
+make test      # Run tests
+make install   # Build and install to $GOPATH/bin
+```
+
+### Cursor Skill
+
+This repo ships a Cursor Agent skill with GVE command reference and conventions:
 
 ```bash
 cp -r skills/gve ~/.cursor/skills/gve
 ```
 
-## 从源码构建
+## License
 
-```bash
-git clone git@github.com:castle-x/gve.git
-cd gve
-make install   # 编译并安装到 $GOPATH/bin
-make test      # 运行测试
-```
+MIT

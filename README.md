@@ -26,16 +26,29 @@ Two companion asset libraries keep teams consistent:
 
 ## Installation
 
-**Requires:** Go 1.22+
+**Requirements:**
+
+| Dependency | Version | Purpose |
+|---|---|---|
+| [Go](https://go.dev) | ≥ 1.22 | Compile gve and Go backend |
+| [Node.js](https://nodejs.org) | ≥ 18 | Run Vite dev server and frontend build |
+| [pnpm](https://pnpm.io) | any | Frontend package manager |
+| [Git](https://git-scm.com) | any | Clone asset library cache |
+| [Air](https://github.com/air-verse/air) | any | Go hot-reload in `gve dev` (optional) |
 
 ```bash
 go install github.com/castle-x/gve/cmd/gve@latest
 ```
 
-Verify:
+Make sure `$GOPATH/bin` is in your `PATH`:
 
 ```bash
-gve version
+export PATH="$PATH:$(go env GOPATH)/bin"   # add to ~/.bashrc or ~/.zshrc
+```
+
+Verify everything is set up:
+
+```bash
 gve doctor
 ```
 
@@ -44,14 +57,11 @@ gve doctor
 ```bash
 gve init my-app && cd my-app
 
-# Install frontend dependencies
-cd site && pnpm install && cd ..
-
 # Add a UI component and an API contract
 gve ui add button
 gve api add example-project/user@v1
 
-# Start developing
+# Start developing (auto-runs pnpm install on first run)
 gve dev
 # [go]   Server starting on :8080
 # [vite] Local: http://localhost:5173

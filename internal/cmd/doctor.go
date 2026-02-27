@@ -35,6 +35,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	results := []checkResult{
 		checkGo(),
+		checkGoPath(),
 		checkNode(),
 		checkPnpm(),
 		checkGit(),
@@ -62,6 +63,23 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func checkGoPath() checkResult {
+	gopath, err := exec.Command("go", "env", "GOPATH").Output()
+	if err != nil {
+		return checkResult{name: "GOPATH/bin", ok: false, message: "cannot determine GOPATH"}
+	}
+	bin := strings.TrimSpace(string(gopath)) + "/bin"
+	_, err = exec.LookPath("gve")
+	if err != nil {
+		return checkResult{
+			name:    "GOPATH/bin",
+			ok:      false,
+			message: fmt.Sprintf("not in PATH — add to ~/.bashrc: export PATH=\"$PATH:%s\"", bin),
+		}
+	}
+	return checkResult{name: "GOPATH/bin", ok: true, version: "in PATH"}
 }
 
 func checkGo() checkResult {

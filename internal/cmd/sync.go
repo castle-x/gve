@@ -63,16 +63,27 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Sync API assets (placeholder for future)
+	// Sync API assets
 	if len(lf.API.Assets) > 0 {
+		apiMgr := asset.NewManager(cfg.CacheDir)
 		fmt.Println("Syncing API assets...")
-		for name := range lf.API.Assets {
-			apiDir := filepath.Join(projectDir, "api", name)
-			if _, err := os.Stat(apiDir); err == nil {
+		if err := apiMgr.EnsureCache(cfg.APIRegistry, "api"); err != nil {
+			return fmt.Errorf("update api cache: %w", err)
+		}
+
+		for name, entry := range lf.API.Assets {
+			if asset.APIAssetDirExists(projectDir, name, entry.Version) {
 				skipped++
-			} else {
-				fmt.Printf("  ⚠ %s: API sync not yet implemented\n", name)
+				continue
 			}
+
+			fmt.Printf("  Installing %s@%s...\n", name, entry.Version)
+			_, err := asset.InstallAPIAsset(apiMgr, name, entry.Version, projectDir)
+			if err != nil {
+				fmt.Printf("  ✗ Failed to install %s: %v\n", name, err)
+				continue
+			}
+			installed++
 		}
 	}
 

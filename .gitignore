@@ -1,0 +1,23 @@
+# Build output
+dist/
+*.exe
+
+# Go
+*.test
+coverage.out
+
+# Frontend
+node_modules/
+site/dist/
+site/node_modules/
+
+# IDE & local tools
+.agents/
+.claude/
+.cursor/
+.vscode/
+skills-lock.json
+
+# OS
+.DS_Store
+Thumbs.db

@@ -61,8 +61,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\n✓ Project %s created successfully\n", projectName)
 	fmt.Println("\nNext steps:")
 	fmt.Printf("  cd %s\n", projectName)
-	fmt.Println("  cd site && pnpm install")
-	fmt.Println("  cd .. && gve dev")
+	fmt.Println("  gve dev")
 
 	return nil
 }

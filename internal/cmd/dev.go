@@ -37,6 +37,32 @@ func runDev(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("site/ directory not found — run 'gve init' first")
 	}
 
+	// Ensure site/dist/ exists so go:embed all:dist doesn't fail in dev mode.
+	distDir := filepath.Join(siteDir, "dist")
+	if _, err := os.Stat(distDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(distDir, 0755); err != nil {
+			return fmt.Errorf("create site/dist: %w", err)
+		}
+		placeholder := filepath.Join(distDir, ".gitkeep")
+		if err := os.WriteFile(placeholder, []byte(""), 0644); err != nil {
+			return fmt.Errorf("create site/dist/.gitkeep: %w", err)
+		}
+	}
+
+	// Auto-run pnpm install if node_modules is missing.
+	nodeModules := filepath.Join(siteDir, "node_modules")
+	if _, err := os.Stat(nodeModules); os.IsNotExist(err) {
+		fmt.Println("  node_modules not found, running pnpm install...")
+		installCmd := exec.Command("pnpm", "install")
+		installCmd.Dir = siteDir
+		installCmd.Stdout = os.Stdout
+		installCmd.Stderr = os.Stderr
+		if err := installCmd.Run(); err != nil {
+			return fmt.Errorf("pnpm install failed: %w", err)
+		}
+		fmt.Println()
+	}
+
 	port, _ := cmd.Flags().GetInt("port")
 	vitePort, _ := cmd.Flags().GetInt("vite-port")
 

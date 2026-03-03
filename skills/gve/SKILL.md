@@ -5,6 +5,8 @@ description: GVE（Go + Vite + Embed）全栈项目脚手架使用指南。在 G
 
 # GVE 使用指南
 
+**规范来源**：本 skill 的权威文档仅限本目录内文件（`SKILL.md`、`reference.md`）。勿引用当前打开项目下的 `docs/` 或其它路径，否则在非 gve 仓库中会指向错误内容。
+
 GVE 是一个 Go + Vite + embed 全栈脚手架，包含三个仓库：
 
 | 仓库 | 职责 |
@@ -52,34 +54,75 @@ gve registry build                # 扫描 assets/ 自动生成 registry.json
 {project}/
 ├── go.mod / go.sum
 ├── Makefile
-├── gve.lock                      # 资产版本锁定文件（提交 Git）
+├── gve.lock                          # 资产版本锁定文件（始终提交 Git）
 ├── .gitignore
-├── .gve/                         # 运行时数据（不提交 Git）
+├── .gve/                             # 运行时数据（不提交 Git）
 │   ├── run.pid
 │   └── logs/
 │
-├── cmd/server/main.go            # Go 应用入口
-├── internal/
-│   ├── handler/                  # HTTP 处理层
-│   └── service/                  # 业务逻辑层
+├── cmd/server/
+│   └── main.go                       # 只负责注册路由 + 启动 HTTP server
 │
-├── api/                          # API 契约（gve api add 安装到此）
-│   └── {project}/{resource}/{vN}/
-│       ├── {resource}.thrift
-│       ├── {resource}.go
-│       ├── client.go
-│       └── client.ts
+├── internal/                         # 业务实现（按需扩展）
+│   ├── handler/                      # ★ HTTP 层：解析请求、调用 service、返回响应
+│   ├── service/                      # ★ 业务逻辑层：不依赖 HTTP
+│   ├── model/                        # 数据模型（可选，按需加）
+│   └── repo/                         # 数据访问层（可选，按需加）
 │
-└── site/                         # 前端
-    ├── embed.go                  # go:embed all:dist
+├── api/                              # ★ 仅由 gve api add 安装，禁止手写
+│   └── {project}/{resource}/v{N}/
+│       ├── {resource}.thrift         # Thrift IDL
+│       ├── {resource}.go             # Go 结构体
+│       ├── client.go                 # Go HTTP Client
+│       └── client.ts                 # TypeScript fetch Client
+│
+└── site/                             # 前端（base-setup 初始化）
+    ├── embed.go                      # go:embed all:dist（不修改）
     ├── package.json / pnpm-lock.yaml
-    ├── vite.config.ts / tsconfig.json / biome.json
-    ├── index.html
+    ├── vite.config.ts / tsconfig.json / biome.json / index.html
     └── src/
-        ├── app/                  # 框架层（routes、providers、styles）
-        ├── views/                # 业务页面
-        └── shared/ui/            # UI 资产安装目录（gve ui add → 此处）
+        ├── app/                      # ★ 框架层，只放初始化代码，不放业务
+        │   ├── main.tsx              # 入口：ReactDOM.createRoot，不写业务
+        │   ├── routes.tsx            # 路由表
+        │   ├── providers.tsx         # 全局 Provider 组合
+        │   └── styles/globals.css    # CSS 变量 + Tailwind 入口
+        │
+        ├── views/                    # ★ 业务页面，按功能模块分子目录
+        │   └── {feature}/
+        │       ├── index.tsx         # 该功能页面入口（路由引用）
+        │       └── components/       # 该功能私有组件（不跨 feature 复用）
+        │
+        └── shared/                   # ★ 跨 views 复用的代码
+            ├── ui/                   # ★ UI 资产（gve ui add 安装，禁止手写组件）
+            ├── lib/                  # 工具函数（cn.ts、request.ts 等）
+            ├── hooks/                # 通用 React hooks（可选）
+            └── types/                # 共享 TypeScript 类型（可选）
 ```
+
+### 后端分层约定
+
+| 层 | 目录 | 职责 | 禁止 |
+|----|------|------|------|
+| 入口 | `cmd/server/main.go` | 注册路由、启动 server | 写业务逻辑 |
+| HTTP 层 | `internal/handler/` | 解析请求参数、调用 service、序列化响应 | 直接操作数据库 |
+| 业务层 | `internal/service/` | 业务规则、数据校验、编排调用 | 依赖 `net/http` 类型 |
+| 数据层 | `internal/repo/`（可选） | 数据库 / 外部服务调用 | 业务规则 |
+| API 契约 | `api/` | 仅由 gve 管理的只读代码 | 手动创建或修改文件 |
+
+**文件命名**：每个业务资源对应一个文件，如 `user_handler.go`、`user_service.go`。
+
+### 前端目录约定
+
+| 目录 | 职责 | 禁止 |
+|------|------|------|
+| `src/app/` | 框架初始化 | 写业务组件或逻辑 |
+| `src/views/{feature}/` | 页面及其私有组件 | 跨 feature 互相 import |
+| `src/shared/ui/` | UI 资产（gve 管理） | 手动在此目录创建组件 |
+| `src/shared/lib/` | 通用工具函数 | 包含业务逻辑 |
+| `src/shared/hooks/` | 通用 hooks（无业务状态） | 依赖特定 feature 的数据 |
+| `src/shared/types/` | 跨模块 TS 类型 | 包含运行时逻辑 |
+
+**依赖方向（单向）**：`views → shared`，`shared` 内部不互相依赖，`app` 只引用 `views` 和 `shared`。
 
 ---
 
@@ -196,7 +239,9 @@ export const Chart = ({ className }) =>
 
 ---
 
-## 详细参考
+## 详细参考（仅以本 skill 目录内文档为准）
 
-- 完整架构设计：见 `docs/2026-02-26-gve-design.md`
-- wk-ui / wk-api 结构细节、registry.json 格式、API 文件规范：见 [reference.md](reference.md)
+**约定**：GVE 规范与参考仅以本 skill 所在目录中的文件为准，勿引用当前项目下的 `docs/` 或其它外部路径。
+
+- 完整架构、项目目录规范、工作流与 gve.lock：见本目录 [reference.md](reference.md)
+- wk-ui / wk-api 结构、registry.json、API 四文件规范、base-setup 内容：见本目录 [reference.md](reference.md)

@@ -278,3 +278,169 @@ mux.Handle("/", http.FileServer(http.FS(site.DistDirFS)))
 | UIRegistry | `github.com/castle-x/wk-ui` |
 | APIRegistry | `github.com/castle-x/wk-api` |
 | CacheDir | `~/.gve/cache/` |
+
+---
+
+## 10. 后端项目结构规范
+
+### 10.1 分层职责
+
+```
+cmd/server/main.go         路由注册 + 服务启动，不写任何业务逻辑
+internal/handler/          HTTP 层
+internal/service/          业务层
+internal/repo/（可选）      数据访问层
+internal/model/（可选）     领域模型 / 数据结构
+api/                       只读，由 gve api add 管理
+```
+
+### 10.2 main.go 职责
+
+```go
+// cmd/server/main.go — 只注册路由 + 启动
+func main() {
+    mux := http.NewServeMux()
+
+    // API 路由优先
+    userHandler := handler.NewUserHandler(service.NewUserService())
+    mux.HandleFunc("/api/users", userHandler.List)
+    mux.HandleFunc("/api/users/{id}", userHandler.Get)
+
+    // 静态文件兜底（SPA）
+    mux.Handle("/", http.FileServer(http.FS(site.DistDirFS)))
+
+    log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+### 10.3 handler 层职责
+
+```go
+// internal/handler/user_handler.go
+// 只做：解析请求 → 调用 service → 返回 JSON
+type UserHandler struct { svc *service.UserService }
+
+func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
+    users, err := h.svc.ListUsers(r.Context())
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    json.NewEncoder(w).Encode(users)
+}
+```
+
+- **禁止**：handler 层直接读写数据库，或包含业务规则判断。
+
+### 10.4 service 层职责
+
+```go
+// internal/service/user_service.go
+// 只做业务逻辑，不知道 HTTP 协议
+type UserService struct { /* repo 依赖注入 */ }
+
+func (s *UserService) ListUsers(ctx context.Context) ([]model.User, error) {
+    // 业务校验、数据组装等
+}
+```
+
+- **禁止**：service 依赖 `net/http`、`http.Request`、`http.ResponseWriter`。
+
+### 10.5 业务扩展原则
+
+- **可以**添加：`internal/repo/`、`internal/model/`、`internal/middleware/`、`internal/config/` 等
+- **禁止**：在 `api/` 目录手动创建或修改文件（该目录由 `gve api add` 独占管理）
+- **建议**：每个业务资源对应一套文件，如 `user_handler.go` / `user_service.go` / `user_repo.go`，避免堆在同一文件里
+
+---
+
+## 11. 前端项目结构规范
+
+### 11.1 src 完整目录说明
+
+```
+site/src/
+├── app/                      # 框架初始化层（不放业务代码）
+│   ├── main.tsx              # 入口：仅 createRoot + <App> 或 <RouterProvider>
+│   ├── routes.tsx            # 路由定义，import views 中的页面
+│   ├── providers.tsx         # 全局 Provider 组合（不包含业务逻辑）
+│   └── styles/
+│       └── globals.css       # CSS 变量定义 + @import "tailwindcss"
+│
+├── views/                    # 业务页面层
+│   ├── home/
+│   │   └── index.tsx         # 首页（路由直接引用此文件）
+│   ├── settings/
+│   │   ├── index.tsx         # 设置页
+│   │   └── components/       # 该页面私有组件
+│   │       └── ThemeToggle.tsx
+│   └── {feature}/
+│       ├── index.tsx
+│       └── components/
+│
+└── shared/                   # 跨 views 的公共代码
+    ├── ui/                   # UI 资产（gve ui add 安装，禁止手写）
+    │   ├── button/
+    │   │   └── button.tsx
+    │   └── data-table/
+    │       ├── data-table.tsx
+    │       └── data-table.module.css
+    ├── lib/                  # 纯工具函数（无副作用，无业务逻辑）
+    │   ├── cn.ts             # clsx + tailwind-merge（base-setup 提供）
+    │   └── request.ts        # fetch 封装（按需添加）
+    ├── hooks/                # 通用 React hooks（可选）
+    │   └── use-debounce.ts
+    └── types/                # 跨模块共享的 TypeScript 类型（可选）
+        └── common.ts
+```
+
+### 11.2 依赖方向（严格单向）
+
+```
+app  →  views  →  shared
+             ↘  shared
+app  →  shared
+```
+
+- `views/{featureA}` **禁止** import `views/{featureB}`
+- `shared/` 内部各目录 **禁止** 互相依赖
+- `app/` **禁止** 包含业务状态或业务逻辑
+
+### 11.3 views 页面命名约定
+
+```tsx
+// views/users/index.tsx — 路由引用的入口
+export { UsersPage as default } from './UsersPage'
+
+// views/users/UsersPage.tsx — 实际页面组件
+export function UsersPage() { ... }
+
+// views/users/components/UserCard.tsx — 页面私有组件
+export function UserCard({ user }: { user: User }) { ... }
+```
+
+### 11.4 shared/ui 使用约定
+
+- `shared/ui/` 下的组件由 `gve ui add` 安装管理，**不要在此手写组件**
+- 使用方式：
+
+```tsx
+// 正确：从 shared/ui 引入 gve 管理的组件
+import { Button } from '@/shared/ui/button/button'
+
+// 错误：在 shared/ui/ 下手动创建 my-custom.tsx
+```
+
+- 若某组件仅在单个 feature 使用 → 放 `views/{feature}/components/`
+- 若某组件跨多个 feature 使用但不是 wk-ui 资产 → 评估是否添加到 wk-ui，或临时放 `shared/lib/`
+
+### 11.5 禁止事项汇总
+
+| 禁止行为 | 正确做法 |
+|----------|----------|
+| 直接在 `src/` 下创建 `.tsx` 文件 | 放入 `app/`、`views/` 或 `shared/` |
+| 在 `shared/ui/` 手写组件 | 通过 `gve ui add` 安装，或放 `views/{feature}/components/` |
+| `views/featureA` import `views/featureB` | 将共用部分提取到 `shared/` |
+| `src/app/` 写业务状态或 API 调用 | 放入对应 `views/` 或 `shared/hooks/` |
+| 在 `shared/lib/` 写业务逻辑 | 放入对应 `views/` 或 `service` 层 |
+| 任意创建顶层目录（如 `src/widgets/`、`src/entities/`）| 遵循 `app/views/shared` 三层结构 |

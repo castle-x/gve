@@ -39,11 +39,16 @@ func TestInstallAPIAsset(t *testing.T) {
 		t.Errorf("version = %q, want %q", ver, "v1")
 	}
 
-	expectedFiles := []string{"user.thrift", "user.go", "client.go", "client.ts"}
+	expectedFiles := []string{"user.thrift"}
 	destDir := filepath.Join(projectDir, "api", "my-project", "user", "v1")
 	for _, f := range expectedFiles {
 		if _, err := os.Stat(filepath.Join(destDir, f)); err != nil {
 			t.Errorf("expected file %s not found: %v", f, err)
+		}
+	}
+	for _, f := range []string{"user.go", "client.go", "client.ts"} {
+		if _, err := os.Stat(filepath.Join(destDir, f)); err == nil {
+			t.Errorf("did not expect generated file %s in project api dir", f)
 		}
 	}
 }

@@ -181,11 +181,17 @@ func TestUserJourney(t *testing.T) {
 			t.Errorf("version = %q, want v1", ver)
 		}
 
-		expectedFiles := []string{"user.thrift", "user.go", "client.go", "client.ts"}
+		expectedFiles := []string{"user.thrift"}
 		for _, f := range expectedFiles {
 			p := filepath.Join(projectDir, "api", "example-project", "user", "v1", f)
 			if _, err := os.Stat(p); err != nil {
 				t.Errorf("expected api file %s: %v", f, err)
+			}
+		}
+		for _, f := range []string{"user.go", "client.go", "client.ts"} {
+			p := filepath.Join(projectDir, "api", "example-project", "user", "v1", f)
+			if _, err := os.Stat(p); err == nil {
+				t.Errorf("did not expect generated api file in root api dir: %s", f)
 			}
 		}
 

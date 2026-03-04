@@ -49,9 +49,12 @@ func InstallAPIAsset(mgr *Manager, resourcePath, version, projectDir string) (st
 
 	var files []string
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".thrift" {
 			files = append(files, e.Name())
 		}
+	}
+	if len(files) == 0 {
+		return "", fmt.Errorf("no thrift file found in API asset %q@%s", resourcePath, installedVersion)
 	}
 
 	if err := CopyAsset(srcDir, destDir, files); err != nil {

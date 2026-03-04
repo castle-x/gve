@@ -1,6 +1,7 @@
 package template
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"os"
@@ -77,4 +78,24 @@ func Scaffold(projectDir string, data ScaffoldData) error {
 	}
 
 	return nil
+}
+
+// RenderFileTemplate renders an embedded template from internal/template/files.
+func RenderFileTemplate(name string, data interface{}) ([]byte, error) {
+	content, err := templateFS.ReadFile("files/" + name)
+	if err != nil {
+		return nil, fmt.Errorf("read template %s: %w", name, err)
+	}
+
+	tmpl, err := template.New(name).Parse(string(content))
+	if err != nil {
+		return nil, fmt.Errorf("parse template %s: %w", name, err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("execute template %s: %w", name, err)
+	}
+
+	return buf.Bytes(), nil
 }

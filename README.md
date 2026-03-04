@@ -11,13 +11,13 @@ Two companion asset libraries keep teams consistent:
 | Repository | Purpose |
 |---|---|
 | [wk-ui](https://github.com/castle-x/wk-ui) | Shared UI components (React + Tailwind wrappers around Radix UI) |
-| [wk-api](https://github.com/castle-x/wk-api) | Shared API contracts (Thrift IDL + pre-generated Go/TypeScript clients) |
+| [wk-api](https://github.com/castle-x/wk-api) | Shared API contracts (Thrift IDL only) |
 
 ## Features
 
 - **Project scaffolding** — `gve init` generates a Go backend + React/Vite frontend with sane defaults
 - **UI asset management** — install, diff, sync, and upgrade shared UI components across projects
-- **API contract management** — pull pre-generated Thrift clients (Go + TypeScript) without local toolchains
+- **API contract management** — install shared contracts or generate project-local API artifacts with built-in thriftgo
 - **One-command dev** — `gve dev` runs Go (with Air hot-reload) and Vite concurrently, prefixed output
 - **Single-binary build** — `gve build` compiles frontend into Go via `embed`, supports cross-compilation
 - **Background service** — `gve run` with smart rebuild, PID management, and daily log rotation
@@ -61,6 +61,11 @@ gve init my-app && cd my-app
 gve ui add button
 gve api add example-project/user@v1
 
+# Or create your own API contract locally
+gve api new my-app/task
+# edit api/my-app/task/v1/task.thrift
+gve api generate
+
 # Start developing (auto-runs pnpm install on first run)
 gve dev
 # [go]   Server starting on :8080
@@ -93,6 +98,8 @@ gve ui sync [asset]                         # Upgrade with conflict detection
 
 gve api add <project>/<resource>[@ver]      # Install API contract
 gve api sync                                # Upgrade API contracts
+gve api new <project>/<resource> [version]  # Create local thrift skeleton
+gve api generate                            # Generate Go to internal/api and TS client to site/src/api
 
 gve sync                                    # Restore all from gve.lock
 gve status                                  # Show available updates
@@ -113,12 +120,14 @@ After `gve init my-app`:
 my-app/
 ├── cmd/server/main.go        # Go entry point
 ├── internal/                  # Business logic
-├── api/                       # API contracts (gve api add)
+├── api/                       # API contracts (thrift only, from gve api add/new)
+├── internal/api/              # Generated Go API artifacts (gve api generate)
 ├── site/                      # Frontend (React + Vite)
 │   ├── embed.go               # go:embed all:dist
 │   ├── package.json
 │   ├── src/
 │   │   ├── app/               # Routes, providers, styles
+│   │   ├── api/               # Generated TypeScript API client (gve api generate)
 │   │   ├── views/             # Pages
 │   │   └── shared/ui/         # UI assets (gve ui add)
 │   └── ...

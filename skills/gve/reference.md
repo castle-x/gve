@@ -106,7 +106,7 @@ git commit -m "feat(ui): add my-component v1.0.0"
 
 ---
 
-## 2. wk-api 资产库完整结构
+## 2. wk-api 资产库完整结构（thrift only）
 
 ```
 wk-api/
@@ -115,23 +115,14 @@ wk-api/
 ├── ai-console/
 │   └── user/
 │       ├── v1/
-│       │   ├── user.thrift         # Thrift IDL
-│       │   ├── user.go             # Go 结构体（thrift-to-go 生成）
-│       │   ├── client.go           # Go HTTP Client
-│       │   └── client.ts           # TypeScript fetch Client
+│       │   └── user.thrift         # Thrift IDL
 │       └── v2/                     # 破坏性变更才升大版本
-│           ├── user.thrift
-│           ├── user.go
-│           ├── client.go
-│           └── client.ts
+│           └── user.thrift
 │
 └── ai-worker/
     └── task/
         └── v1/
-            ├── task.thrift
-            ├── task.go
-            ├── client.go
-            └── client.ts
+            └── task.thrift
 ```
 
 ### API registry.json 格式
@@ -166,13 +157,32 @@ wk-api/
 # 在 wk-api 仓库内
 mkdir -p ai-worker/new-service/v1
 
-# 编写四个文件：new-service.thrift / new-service.go / client.go / client.ts
+# 编写 thrift 文件：new-service.thrift
 
 # 更新 registry.json（手动编辑或 gve registry build）
 
 git add ai-worker/new-service/ registry.json
 git commit -m "feat(api): add ai-worker/new-service v1"
 ```
+
+### 项目内自建 API（无需安装 thriftgo）
+
+`gve` 内置 `github.com/cloudwego/thriftgo`，使用方无需在本机安装 thriftgo 二进制。
+
+```bash
+# 在业务项目目录
+gve api new my-app/task         # 生成 api/my-app/task/v1/task.thrift
+# 编辑 thrift：补充 struct / service 方法
+gve api generate                # 生成 internal/api/.../{resource}.go + client.go，以及 site/src/api/.../client.ts
+```
+
+默认行为：
+- 仅扫描规范目录：`api/*/*/v*/{resource}.thrift`
+- 任意一个 thrift 生成失败时立即中断（fail-fast）
+- `api/` 目录仅保留 `.thrift`（共享契约源）
+- Go 生成物输出到 `internal/api/{project}/{resource}/{version}/`
+- TS 生成物输出到 `site/src/api/{project}/{resource}/{version}/`
+- 永不覆盖 `.thrift`；会覆盖生成物 `*.go`、`client.go`、`client.ts`
 
 ---
 

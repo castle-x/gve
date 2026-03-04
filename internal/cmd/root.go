@@ -45,6 +45,8 @@ func init() {
 
 	apiCmd.AddCommand(newAPIAddCmd())
 	apiCmd.AddCommand(newAPISyncCmd())
+	apiCmd.AddCommand(newAPINewCmd())
+	apiCmd.AddCommand(newAPIGenerateCmd())
 
 	registryCmd.AddCommand(newRegistryBuildCmd())
 

@@ -103,3 +103,51 @@ service TaskService {
 		t.Fatalf("expected api dir to contain only task.thrift, got %+v", entries)
 	}
 }
+
+func TestGenerateThriftArtifacts_IdempotentNoStaleSubdir(t *testing.T) {
+	projectDir := t.TempDir()
+	thriftPath := filepath.Join(projectDir, "api", "my-app", "user", "v1", "user.thrift")
+	if err := os.MkdirAll(filepath.Dir(thriftPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	content := `namespace go user
+
+struct GetUserReq {
+  1: i64 id
+}
+
+service UserService {
+  string GetUser(1: GetUserReq req)
+}
+`
+	if err := os.WriteFile(thriftPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	goOutDir := filepath.Join(projectDir, "internal", "api", "my-app", "user", "v1")
+
+	// First run
+	if err := GenerateThriftArtifacts(projectDir, thriftPath); err != nil {
+		t.Fatalf("first generate: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(goOutDir, "user.go")); err != nil {
+		t.Fatalf("user.go missing after first run: %v", err)
+	}
+
+	// Second run (idempotent)
+	if err := GenerateThriftArtifacts(projectDir, thriftPath); err != nil {
+		t.Fatalf("second generate: %v", err)
+	}
+
+	// user.go should exist at the correct level
+	if _, err := os.Stat(filepath.Join(goOutDir, "user.go")); err != nil {
+		t.Fatalf("user.go missing after second run: %v", err)
+	}
+
+	// No stale namespace subdirectory should remain
+	staleDir := filepath.Join(goOutDir, "user")
+	if _, err := os.Stat(staleDir); err == nil {
+		entries, _ := os.ReadDir(staleDir)
+		t.Fatalf("stale namespace subdirectory %s should not exist, contains: %+v", staleDir, entries)
+	}
+}

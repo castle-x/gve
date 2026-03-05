@@ -126,10 +126,10 @@ func ParseThriftServiceInfo(thriftPath string) (*ThriftServiceInfo, error) {
 
 func normalizeGeneratedGoFile(dir, baseName string) error {
 	want := filepath.Join(dir, baseName+".go")
-	if _, err := os.Stat(want); err == nil {
-		return nil
-	}
 
+	// Always scan for thriftgo-generated files in namespace subdirectories,
+	// even if the target already exists. thriftgo recreates the subdirectory
+	// on every invocation, so we must clean it up to avoid stale duplicates.
 	var found string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -148,6 +148,9 @@ func normalizeGeneratedGoFile(dir, baseName string) error {
 		return fmt.Errorf("scan generated go file: %w", err)
 	}
 	if found == "" {
+		if _, err := os.Stat(want); err == nil {
+			return nil
+		}
 		return fmt.Errorf("generated go file not found for %s", baseName)
 	}
 

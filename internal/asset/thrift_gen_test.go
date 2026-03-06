@@ -5,12 +5,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/cloudwego/thriftgo/parser"
 )
 
 func TestParseThriftServiceInfo(t *testing.T) {
 	dir := t.TempDir()
 	thriftPath := filepath.Join(dir, "task.thrift")
 	content := `namespace go task
+
+struct TaskReq {
+  1: string name
+  2: optional i64 parent_id
+}
 
 service TaskService {
   i64 GetTask(1: i64 id)
@@ -40,6 +47,27 @@ service TaskService {
 	}
 	if info.Methods[1].ReturnTypeTS != "void" {
 		t.Fatalf("expected void return in second method, got %+v", info.Methods[1])
+	}
+
+	// Verify struct extraction
+	if len(info.Structs) != 1 {
+		t.Fatalf("structs = %d, want 1", len(info.Structs))
+	}
+	s := info.Structs[0]
+	if s.Name != "TaskReq" {
+		t.Fatalf("struct name = %q, want TaskReq", s.Name)
+	}
+	if len(s.Fields) != 2 {
+		t.Fatalf("fields = %d, want 2", len(s.Fields))
+	}
+	if s.Fields[0].Name != "Name" || s.Fields[0].GoType != "string" {
+		t.Fatalf("unexpected first field: %+v", s.Fields[0])
+	}
+	if s.Fields[1].Name != "ParentID" || s.Fields[1].GoType != "int64" {
+		t.Fatalf("unexpected second field: %+v", s.Fields[1])
+	}
+	if !strings.Contains(s.Fields[1].JSONTag, "omitempty") {
+		t.Fatalf("expected omitempty on optional field, got %s", s.Fields[1].JSONTag)
 	}
 }
 
@@ -79,12 +107,30 @@ service TaskService {
 		t.Fatalf("expected generated client.ts: %v", err)
 	}
 
+	// task.go should contain our struct definition, not thriftgo output
+	taskBody, err := os.ReadFile(filepath.Join(goOutDir, "task.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskStr := string(taskBody)
+	if !strings.Contains(taskStr, "type EchoReq struct") {
+		t.Fatalf("task.go should contain EchoReq struct definition, got:\n%s", taskStr)
+	}
+	if !strings.Contains(taskStr, "package task") {
+		t.Fatalf("task.go should have package task, got:\n%s", taskStr)
+	}
+	// Should NOT contain thriftgo artifacts
+	if strings.Contains(taskStr, "TProtocol") || strings.Contains(taskStr, "ReadStructBegin") {
+		t.Fatalf("task.go should not contain thriftgo serialization code, got:\n%s", taskStr)
+	}
+
+	// client.go should use HTTPClient naming
 	goBody, err := os.ReadFile(filepath.Join(goOutDir, "client.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(goBody), "func (c *TaskServiceClient) Echo") {
-		t.Fatalf("client.go should contain Echo method, got:\n%s", goBody)
+	if !strings.Contains(string(goBody), "func (c *TaskServiceHTTPClient) Echo") {
+		t.Fatalf("client.go should contain TaskServiceHTTPClient.Echo method, got:\n%s", goBody)
 	}
 
 	tsBody, err := os.ReadFile(filepath.Join(tsOutDir, "client.ts"))
@@ -130,7 +176,8 @@ service UserService {
 	if err := GenerateThriftArtifacts(projectDir, thriftPath); err != nil {
 		t.Fatalf("first generate: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(goOutDir, "user.go")); err != nil {
+	first, err := os.ReadFile(filepath.Join(goOutDir, "user.go"))
+	if err != nil {
 		t.Fatalf("user.go missing after first run: %v", err)
 	}
 
@@ -138,16 +185,86 @@ service UserService {
 	if err := GenerateThriftArtifacts(projectDir, thriftPath); err != nil {
 		t.Fatalf("second generate: %v", err)
 	}
-
-	// user.go should exist at the correct level
-	if _, err := os.Stat(filepath.Join(goOutDir, "user.go")); err != nil {
+	second, err := os.ReadFile(filepath.Join(goOutDir, "user.go"))
+	if err != nil {
 		t.Fatalf("user.go missing after second run: %v", err)
 	}
 
-	// No stale namespace subdirectory should remain
-	staleDir := filepath.Join(goOutDir, "user")
-	if _, err := os.Stat(staleDir); err == nil {
-		entries, _ := os.ReadDir(staleDir)
-		t.Fatalf("stale namespace subdirectory %s should not exist, contains: %+v", staleDir, entries)
+	if string(first) != string(second) {
+		t.Fatalf("idempotency failed: first and second run produced different output")
+	}
+}
+
+func TestToPascalCase(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"user_name", "UserName"},
+		{"id", "ID"},
+		{"user_id", "UserID"},
+		{"parent_url", "ParentURL"},
+		{"http_status", "HTTPStatus"},
+		{"created_at", "CreatedAt"},
+		{"api_key", "APIKey"},
+		{"simple", "Simple"},
+		{"cpu_usage", "CPUUsage"},
+	}
+	for _, tt := range tests {
+		got := toPascalCase(tt.input)
+		if got != tt.want {
+			t.Errorf("toPascalCase(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestThriftTypeToGo(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  *parser.Type
+		want string
+	}{
+		{"nil", nil, "any"},
+		{"bool", &parser.Type{Name: "bool"}, "bool"},
+		{"i32", &parser.Type{Name: "i32"}, "int32"},
+		{"i64", &parser.Type{Name: "i64"}, "int64"},
+		{"double", &parser.Type{Name: "double"}, "float64"},
+		{"string", &parser.Type{Name: "string"}, "string"},
+		{"binary", &parser.Type{Name: "binary"}, "[]byte"},
+		{"byte", &parser.Type{Name: "byte"}, "int8"},
+		{"i8", &parser.Type{Name: "i8"}, "int8"},
+		{"i16", &parser.Type{Name: "i16"}, "int16"},
+		{"list<string>", &parser.Type{Name: "list", ValueType: &parser.Type{Name: "string"}}, "[]string"},
+		{"set<i64>", &parser.Type{Name: "set", ValueType: &parser.Type{Name: "i64"}}, "[]int64"},
+		{"map<string,i32>", &parser.Type{Name: "map", KeyType: &parser.Type{Name: "string"}, ValueType: &parser.Type{Name: "i32"}}, "map[string]int32"},
+		{"struct ref", &parser.Type{Name: "UserInfo"}, "UserInfo"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := thriftTypeToGo(tt.typ)
+			if got != tt.want {
+				t.Errorf("thriftTypeToGo(%v) = %q, want %q", tt.typ, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildJSONTag(t *testing.T) {
+	tests := []struct {
+		name     string
+		field    string
+		optional bool
+		want     string
+	}{
+		{"required", "user_name", false, "`json:\"user_name\"`"},
+		{"optional", "avatar", true, "`json:\"avatar,omitempty\"`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildJSONTag(tt.field, tt.optional)
+			if got != tt.want {
+				t.Errorf("buildJSONTag(%q, %v) = %q, want %q", tt.field, tt.optional, got, tt.want)
+			}
+		})
 	}
 }

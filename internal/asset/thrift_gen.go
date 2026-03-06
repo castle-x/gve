@@ -2,17 +2,15 @@ package asset
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	gtmpl "github.com/castle-x/gve/internal/template"
 	"github.com/cloudwego/thriftgo/parser"
-	"github.com/cloudwego/thriftgo/sdk"
 )
 
-var invokeThriftgo = sdk.InvokeThriftgo
 var parseThriftFile = parser.ParseFile
 
 type ServiceMethod struct {
@@ -23,10 +21,22 @@ type ServiceMethod struct {
 	ReturnTypeTS  string
 }
 
+type StructField struct {
+	Name    string // PascalCase Go field name
+	GoType  string // Go type
+	JSONTag string // full JSON tag with backticks
+}
+
+type StructDef struct {
+	Name   string
+	Fields []StructField
+}
+
 type ThriftServiceInfo struct {
 	PackageName string
 	ServiceName string
 	Methods     []ServiceMethod
+	Structs     []StructDef
 }
 
 func GenerateThriftArtifacts(projectDir, thriftPath string) error {
@@ -63,12 +73,14 @@ func GenerateThriftArtifacts(projectDir, thriftPath string) error {
 		return fmt.Errorf("create ts output dir: %w", err)
 	}
 
-	if err := invokeThriftgo(nil, "thriftgo", "-g", "go", "-o", goDir, absPath); err != nil {
-		return fmt.Errorf("invoke thriftgo: %w", err)
-	}
+	// Render Go struct definitions from Thrift AST (replaces thriftgo codegen)
 	baseName := strings.TrimSuffix(filepath.Base(absPath), ".thrift")
-	if err := normalizeGeneratedGoFile(goDir, baseName); err != nil {
-		return err
+	typesBody, err := gtmpl.RenderFileTemplate("api_types_go.tmpl", info)
+	if err != nil {
+		return fmt.Errorf("render types template: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(goDir, baseName+".go"), typesBody, 0644); err != nil {
+		return fmt.Errorf("write %s.go: %w", baseName, err)
 	}
 
 	if err := writeGeneratedClientFiles(goDir, tsDir, info); err != nil {
@@ -98,11 +110,11 @@ func ParseThriftServiceInfo(thriftPath string) (*ThriftServiceInfo, error) {
 			ReturnTypeTS:  "unknown",
 		}
 		if len(fn.Arguments) == 1 && fn.Arguments[0].Type != nil {
-			m.RequestType = goTypeName(fn.Arguments[0].Type)
+			m.RequestType = thriftTypeToGo(fn.Arguments[0].Type)
 			m.RequestTypeTS = tsTypeName(fn.Arguments[0].Type)
 		}
 		if !fn.Void && fn.FunctionType != nil {
-			m.ReturnType = goTypeName(fn.FunctionType)
+			m.ReturnType = thriftTypeToGo(fn.FunctionType)
 			m.ReturnTypeTS = tsTypeName(fn.FunctionType)
 		}
 		if fn.Void {
@@ -110,6 +122,20 @@ func ParseThriftServiceInfo(thriftPath string) (*ThriftServiceInfo, error) {
 			m.ReturnTypeTS = "void"
 		}
 		methods = append(methods, m)
+	}
+
+	// Extract struct definitions
+	structs := make([]StructDef, 0, len(ast.Structs))
+	for _, s := range ast.Structs {
+		sd := StructDef{Name: s.Name}
+		for _, f := range s.Fields {
+			sd.Fields = append(sd.Fields, StructField{
+				Name:    toPascalCase(f.Name),
+				GoType:  thriftTypeToGo(f.Type),
+				JSONTag: buildJSONTag(f.Name, f.Requiredness == parser.FieldType_Optional),
+			})
+		}
+		structs = append(structs, sd)
 	}
 
 	pkgName, ok := ast.GetNamespace("go")
@@ -121,45 +147,8 @@ func ParseThriftServiceInfo(thriftPath string) (*ThriftServiceInfo, error) {
 		PackageName: normalizePackageName(pkgName),
 		ServiceName: svc.Name,
 		Methods:     methods,
+		Structs:     structs,
 	}, nil
-}
-
-func normalizeGeneratedGoFile(dir, baseName string) error {
-	want := filepath.Join(dir, baseName+".go")
-
-	// Always scan for thriftgo-generated files in namespace subdirectories,
-	// even if the target already exists. thriftgo recreates the subdirectory
-	// on every invocation, so we must clean it up to avoid stale duplicates.
-	var found string
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || filepath.Base(path) != baseName+".go" {
-			return nil
-		}
-		if path == want {
-			return nil
-		}
-		found = path
-		return fs.SkipAll
-	})
-	if err != nil {
-		return fmt.Errorf("scan generated go file: %w", err)
-	}
-	if found == "" {
-		if _, err := os.Stat(want); err == nil {
-			return nil
-		}
-		return fmt.Errorf("generated go file not found for %s", baseName)
-	}
-
-	_ = os.Remove(want)
-	if err := os.Rename(found, want); err != nil {
-		return fmt.Errorf("move generated go file: %w", err)
-	}
-	_ = os.Remove(filepath.Dir(found))
-	return nil
 }
 
 func writeGeneratedClientFiles(goDir, tsDir string, info *ThriftServiceInfo) error {
@@ -187,11 +176,85 @@ func normalizePackageName(s string) string {
 	return replacer.Replace(s)
 }
 
-func goTypeName(t *parser.Type) string {
+// toPascalCase converts snake_case to PascalCase, handling common abbreviations.
+func toPascalCase(s string) string {
+	abbreviations := map[string]string{
+		"id": "ID", "url": "URL", "http": "HTTP", "https": "HTTPS",
+		"api": "API", "ip": "IP", "uri": "URI", "uid": "UID",
+		"uuid": "UUID", "sql": "SQL", "ssh": "SSH", "tcp": "TCP",
+		"udp": "UDP", "cpu": "CPU", "gpu": "GPU",
+	}
+
+	parts := strings.Split(s, "_")
+	var b strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		lower := strings.ToLower(part)
+		if abbr, ok := abbreviations[lower]; ok {
+			b.WriteString(abbr)
+		} else {
+			runes := []rune(lower)
+			runes[0] = unicode.ToUpper(runes[0])
+			b.WriteString(string(runes))
+		}
+	}
+	return b.String()
+}
+
+// thriftTypeToGo recursively maps a Thrift type to a Go type string.
+func thriftTypeToGo(t *parser.Type) string {
 	if t == nil {
 		return "any"
 	}
-	return strings.TrimSpace(t.Name)
+	name := strings.ToLower(strings.TrimSpace(t.Name))
+	switch name {
+	case "bool":
+		return "bool"
+	case "byte", "i8":
+		return "int8"
+	case "i16":
+		return "int16"
+	case "i32":
+		return "int32"
+	case "i64":
+		return "int64"
+	case "double":
+		return "float64"
+	case "string":
+		return "string"
+	case "binary":
+		return "[]byte"
+	case "list", "set":
+		elem := "any"
+		if t.ValueType != nil {
+			elem = thriftTypeToGo(t.ValueType)
+		}
+		return "[]" + elem
+	case "map":
+		key := "string"
+		val := "any"
+		if t.KeyType != nil {
+			key = thriftTypeToGo(t.KeyType)
+		}
+		if t.ValueType != nil {
+			val = thriftTypeToGo(t.ValueType)
+		}
+		return "map[" + key + "]" + val
+	default:
+		// Struct reference — use the type name as-is (PascalCase from Thrift IDL)
+		return strings.TrimSpace(t.Name)
+	}
+}
+
+// buildJSONTag returns a full Go struct tag for JSON serialization.
+func buildJSONTag(fieldName string, optional bool) string {
+	tag := fieldName
+	if optional {
+		tag += ",omitempty"
+	}
+	return "`json:\"" + tag + "\"`"
 }
 
 func tsTypeName(t *parser.Type) string {

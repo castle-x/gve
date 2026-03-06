@@ -264,7 +264,11 @@ TypeScript（fetch 客户端）：
 
 ```typescript
 export class TaskServiceClient {
-  constructor(private readonly baseUrl: string) {}
+  private readonly baseUrl: string
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl
+  }
 
   async CreateTask(reqBody: unknown): Promise<unknown> { ... }
   async Ping(reqBody: unknown): Promise<void> { ... }

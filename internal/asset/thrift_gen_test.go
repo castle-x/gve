@@ -140,6 +140,10 @@ service TaskService {
 	if !strings.Contains(string(tsBody), "async Echo") {
 		t.Fatalf("client.ts should contain Echo method, got:\n%s", tsBody)
 	}
+	// Regression: parameter property syntax is incompatible with erasableSyntaxOnly
+	if strings.Contains(string(tsBody), "constructor(private") {
+		t.Fatalf("client.ts must not use parameter property syntax (incompatible with erasableSyntaxOnly), got:\n%s", tsBody)
+	}
 
 	entries, err := os.ReadDir(filepath.Dir(thriftPath))
 	if err != nil {

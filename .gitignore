@@ -1,6 +1,7 @@
 # Build output
 dist/
 *.exe
+/gve
 
 # Go
 *.test

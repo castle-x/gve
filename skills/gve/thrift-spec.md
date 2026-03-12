@@ -263,16 +263,54 @@ func (c *TaskServiceHTTPClient) Ping(ctx context.Context, reqBody any) (json.Raw
 TypeScript（fetch 客户端）：
 
 ```typescript
+/** Options for customizing client behavior. */
+interface ClientOptions {
+  fetch?: typeof globalThis.fetch
+  baseHeaders?: Record<string, string>
+  onError?: (error: Error, method: string) => void
+}
+
 export class TaskServiceClient {
   private readonly baseUrl: string
+  private readonly options: ClientOptions
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, options?: ClientOptions) {
     this.baseUrl = baseUrl
+    this.options = options ?? {}
   }
 
   async CreateTask(reqBody: unknown): Promise<unknown> { ... }
   async Ping(reqBody: unknown): Promise<void> { ... }
 }
+```
+
+### ClientOptions
+
+生成的 TypeScript 客户端支持可选的 `ClientOptions` 参数，用于注入横切关注点：
+
+- **`fetch`**: 替换默认的 `globalThis.fetch`，用于注入认证、日志、重试等
+- **`baseHeaders`**: 每个请求附加的公共 header（与默认 `Content-Type` 合并，可覆盖）
+- **`onError`**: 请求失败时的回调（在 throw 之前调用），可用于统一错误上报或 401 登出
+
+所有字段均为可选，不传时行为与旧版完全一致。
+
+用法示例：
+
+```typescript
+// 注入认证
+const authFetch: typeof fetch = (input, init) => {
+  const headers = new Headers(init?.headers)
+  headers.set('Authorization', `Bearer ${getToken()}`)
+  return fetch(input, { ...init, headers })
+}
+
+const client = new TaskServiceClient('/api/tasks/v1', {
+  fetch: authFetch,
+  baseHeaders: { 'X-Request-Source': 'web-app' },
+  onError: (error, method) => {
+    console.error(`[${method}]`, error)
+  },
+})
 ```
 
 ---

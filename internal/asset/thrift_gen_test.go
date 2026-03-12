@@ -137,12 +137,33 @@ service TaskService {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(tsBody), "async Echo") {
-		t.Fatalf("client.ts should contain Echo method, got:\n%s", tsBody)
+	tsStr := string(tsBody)
+	if !strings.Contains(tsStr, "async Echo") {
+		t.Fatalf("client.ts should contain Echo method, got:\n%s", tsStr)
 	}
 	// Regression: parameter property syntax is incompatible with erasableSyntaxOnly
-	if strings.Contains(string(tsBody), "constructor(private") {
-		t.Fatalf("client.ts must not use parameter property syntax (incompatible with erasableSyntaxOnly), got:\n%s", tsBody)
+	if strings.Contains(tsStr, "constructor(private") {
+		t.Fatalf("client.ts must not use parameter property syntax (incompatible with erasableSyntaxOnly), got:\n%s", tsStr)
+	}
+	// ClientOptions interface must be present
+	if !strings.Contains(tsStr, "interface ClientOptions") {
+		t.Fatalf("client.ts should contain ClientOptions interface, got:\n%s", tsStr)
+	}
+	// Constructor should accept optional ClientOptions
+	if !strings.Contains(tsStr, "options?: ClientOptions") {
+		t.Fatalf("client.ts constructor should accept options?: ClientOptions, got:\n%s", tsStr)
+	}
+	// Methods should use injected fetch
+	if !strings.Contains(tsStr, "this.options.fetch ?? globalThis.fetch") {
+		t.Fatalf("client.ts should use this.options.fetch ?? globalThis.fetch, got:\n%s", tsStr)
+	}
+	// Methods should spread baseHeaders
+	if !strings.Contains(tsStr, "...this.options.baseHeaders") {
+		t.Fatalf("client.ts should spread baseHeaders, got:\n%s", tsStr)
+	}
+	// Methods should call onError before throw
+	if !strings.Contains(tsStr, "this.options.onError?.(error, 'Echo')") {
+		t.Fatalf("client.ts should call onError with method name, got:\n%s", tsStr)
 	}
 
 	entries, err := os.ReadDir(filepath.Dir(thriftPath))

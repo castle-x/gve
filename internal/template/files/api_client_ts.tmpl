@@ -2,39 +2,40 @@
 
 /** Options for customizing client behavior. */
 interface ClientOptions {
-  fetch?: typeof globalThis.fetch
-  baseHeaders?: Record<string, string>
-  onError?: (error: Error, method: string) => void
+  fetch?: typeof globalThis.fetch;
+  baseHeaders?: Record<string, string>;
+  onError?: (error: Error, method: string) => void;
 }
 
 export class {{ .ServiceName }}Client {
-  private readonly baseUrl: string
-  private readonly options: ClientOptions
+  private readonly baseUrl: string;
+  private readonly options: ClientOptions;
 
   constructor(baseUrl: string, options?: ClientOptions) {
-    this.baseUrl = baseUrl
-    this.options = options ?? {}
+    this.baseUrl = baseUrl;
+    this.options = options ?? {};
   }
 {{ range .Methods }}
   async {{ .Name }}(reqBody: {{ .RequestTypeTS }}): Promise<{{ .ReturnTypeTS }}> {
-    const fetchFn = this.options.fetch ?? globalThis.fetch
+    const fetchFn = this.options.fetch ?? globalThis.fetch;
     const response = await fetchFn(`${this.baseUrl}/{{ .Name }}`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...this.options.baseHeaders,
       },
       body: JSON.stringify(reqBody),
-    })
+    });
 
     if (!response.ok) {
-      const text = await response.text()
-      const error = new Error(`request failed: status=${response.status}, body=${text}`)
-      this.options.onError?.(error, '{{ .Name }}')
-      throw error
+      const text = await response.text();
+      const error = new Error(`request failed: status=${response.status}, body=${text}`);
+      this.options.onError?.(error, "{{ .Name }}");
+      throw error;
     }
-
-    return (await response.json()) as {{ .ReturnTypeTS }}
-  }
-{{ end }}
-}
+{{ if eq .ReturnTypeTS "void" }}
+    await response.json();
+{{ else }}
+    return (await response.json()) as {{ .ReturnTypeTS }};
+{{ end }}  }
+{{ end }}}

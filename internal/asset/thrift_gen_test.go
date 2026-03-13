@@ -162,7 +162,7 @@ service TaskService {
 		t.Fatalf("client.ts should spread baseHeaders, got:\n%s", tsStr)
 	}
 	// Methods should call onError before throw
-	if !strings.Contains(tsStr, "this.options.onError?.(error, 'Echo')") {
+	if !strings.Contains(tsStr, `this.options.onError?.(error, "Echo")`) {
 		t.Fatalf("client.ts should call onError with method name, got:\n%s", tsStr)
 	}
 
@@ -217,6 +217,63 @@ service UserService {
 
 	if string(first) != string(second) {
 		t.Fatalf("idempotency failed: first and second run produced different output")
+	}
+}
+
+func TestGenerateThriftArtifacts_TSBiomeCompliance(t *testing.T) {
+	projectDir := t.TempDir()
+	thriftPath := filepath.Join(projectDir, "api", "my-app", "task", "v1", "task.thrift")
+	if err := os.MkdirAll(filepath.Dir(thriftPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	content := `namespace go task
+
+struct EchoReq {
+  1: string msg
+}
+
+service TaskService {
+  string Echo(1: EchoReq req)
+  void Ping()
+}
+`
+	if err := os.WriteFile(thriftPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := GenerateThriftArtifacts(projectDir, thriftPath); err != nil {
+		t.Fatalf("GenerateThriftArtifacts: %v", err)
+	}
+
+	tsBody, err := os.ReadFile(filepath.Join(projectDir, "site", "src", "api", "my-app", "task", "v1", "client.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tsStr := string(tsBody)
+
+	// Semicolons: statements must end with ;
+	if strings.Contains(tsStr, "private readonly baseUrl: string\n") {
+		t.Fatalf("client.ts should use semicolons, got:\n%s", tsStr)
+	}
+
+	// Double quotes: no single-quoted strings
+	if strings.Contains(tsStr, "'POST'") || strings.Contains(tsStr, "'Content-Type'") {
+		t.Fatalf("client.ts should use double quotes, got:\n%s", tsStr)
+	}
+
+	// void method must not use "as void" (noConfusingVoidType)
+	if strings.Contains(tsStr, "as void") {
+		t.Fatalf("client.ts must not cast to void (noConfusingVoidType), got:\n%s", tsStr)
+	}
+
+	// void method must still consume the response body
+	if !strings.Contains(tsStr, "async Ping") {
+		t.Fatalf("client.ts should contain Ping method, got:\n%s", tsStr)
+	}
+
+	// No trailing blank line before closing brace
+	if strings.HasSuffix(strings.TrimRight(tsStr, "\n"), "\n\n}") {
+		t.Fatalf("client.ts should not have trailing blank line before closing brace, got:\n%s", tsStr)
 	}
 }
 

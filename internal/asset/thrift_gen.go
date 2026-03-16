@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -22,9 +23,12 @@ type ServiceMethod struct {
 }
 
 type StructField struct {
-	Name    string // PascalCase Go field name
-	GoType  string // Go type
-	JSONTag string // full JSON tag with backticks
+	Name     string // PascalCase Go field name
+	GoType   string // Go type
+	TSType   string // TypeScript type
+	JSONName string // original snake_case name (matches JSON key)
+	Optional bool   // whether this field is optional
+	JSONTag  string // full JSON tag with backticks
 }
 
 type StructDef struct {
@@ -33,10 +37,11 @@ type StructDef struct {
 }
 
 type ThriftServiceInfo struct {
-	PackageName string
-	ServiceName string
-	Methods     []ServiceMethod
-	Structs     []StructDef
+	PackageName   string
+	ServiceName   string
+	Methods       []ServiceMethod
+	Structs       []StructDef
+	TSImportTypes []string // struct names used in TS method signatures
 }
 
 func GenerateThriftArtifacts(projectDir, thriftPath string) error {
@@ -87,6 +92,17 @@ func GenerateThriftArtifacts(projectDir, thriftPath string) error {
 		return err
 	}
 
+	// Render TypeScript type definitions
+	if len(info.Structs) > 0 {
+		tsTypesBody, err := gtmpl.RenderFileTemplate("api_types_ts.tmpl", info)
+		if err != nil {
+			return fmt.Errorf("render ts types template: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(tsDir, "types.ts"), tsTypesBody, 0644); err != nil {
+			return fmt.Errorf("write types.ts: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -129,10 +145,14 @@ func ParseThriftServiceInfo(thriftPath string) (*ThriftServiceInfo, error) {
 	for _, s := range ast.Structs {
 		sd := StructDef{Name: s.Name}
 		for _, f := range s.Fields {
+			optional := f.Requiredness == parser.FieldType_Optional
 			sd.Fields = append(sd.Fields, StructField{
-				Name:    toPascalCase(f.Name),
-				GoType:  thriftTypeToGo(f.Type),
-				JSONTag: buildJSONTag(f.Name, f.Requiredness == parser.FieldType_Optional),
+				Name:     toPascalCase(f.Name),
+				GoType:   thriftTypeToGo(f.Type),
+				TSType:   tsTypeName(f.Type),
+				JSONName: f.Name,
+				Optional: optional,
+				JSONTag:  buildJSONTag(f.Name, optional),
 			})
 		}
 		structs = append(structs, sd)
@@ -143,11 +163,43 @@ func ParseThriftServiceInfo(thriftPath string) (*ThriftServiceInfo, error) {
 		pkgName = strings.TrimSuffix(filepath.Base(thriftPath), ".thrift")
 	}
 
+	// Collect struct names referenced in TS method signatures for import.
+	// We must walk the original Thrift AST types (not the formatted TS strings)
+	// because container types like list<T> produce "T[]" which won't match struct names.
+	structNames := make(map[string]bool, len(structs))
+	for _, s := range structs {
+		structNames[s.Name] = true
+	}
+	importSet := make(map[string]bool)
+	for _, fn := range svc.Functions {
+		if len(fn.Arguments) == 1 && fn.Arguments[0].Type != nil {
+			for _, ref := range collectStructRefs(fn.Arguments[0].Type) {
+				if structNames[ref] {
+					importSet[ref] = true
+				}
+			}
+		}
+		if !fn.Void && fn.FunctionType != nil {
+			for _, ref := range collectStructRefs(fn.FunctionType) {
+				if structNames[ref] {
+					importSet[ref] = true
+				}
+			}
+		}
+	}
+	tsImports := make([]string, 0, len(importSet))
+	for name := range importSet {
+		tsImports = append(tsImports, name)
+	}
+	// Sort for deterministic output
+	sort.Strings(tsImports)
+
 	return &ThriftServiceInfo{
-		PackageName: normalizePackageName(pkgName),
-		ServiceName: svc.Name,
-		Methods:     methods,
-		Structs:     structs,
+		PackageName:   normalizePackageName(pkgName),
+		ServiceName:   svc.Name,
+		Methods:       methods,
+		Structs:       structs,
+		TSImportTypes: tsImports,
 	}, nil
 }
 
@@ -257,6 +309,29 @@ func buildJSONTag(fieldName string, optional bool) string {
 	return "`json:\"" + tag + "\"`"
 }
 
+// collectStructRefs recursively extracts user-defined type names from a Thrift AST type.
+// Container types (list, set, map) are traversed to find inner struct references.
+func collectStructRefs(t *parser.Type) []string {
+	if t == nil {
+		return nil
+	}
+	name := strings.ToLower(strings.TrimSpace(t.Name))
+	switch name {
+	case "bool", "byte", "i8", "i16", "i32", "i64", "double", "string", "binary", "void":
+		return nil
+	case "list", "set":
+		return collectStructRefs(t.ValueType)
+	case "map":
+		var refs []string
+		refs = append(refs, collectStructRefs(t.KeyType)...)
+		refs = append(refs, collectStructRefs(t.ValueType)...)
+		return refs
+	default:
+		// Struct reference
+		return []string{strings.TrimSpace(t.Name)}
+	}
+}
+
 func tsTypeName(t *parser.Type) string {
 	if t == nil {
 		return "unknown"
@@ -272,10 +347,23 @@ func tsTypeName(t *parser.Type) string {
 	case "void":
 		return "void"
 	case "list", "set":
-		return "unknown[]"
+		elem := "unknown"
+		if t.ValueType != nil {
+			elem = tsTypeName(t.ValueType)
+		}
+		return elem + "[]"
 	case "map":
-		return "Record<string, unknown>"
+		key := "string"
+		val := "unknown"
+		if t.KeyType != nil {
+			key = tsTypeName(t.KeyType)
+		}
+		if t.ValueType != nil {
+			val = tsTypeName(t.ValueType)
+		}
+		return "Record<" + key + ", " + val + ">"
 	default:
-		return "unknown"
+		// Struct reference — use the type name as-is
+		return strings.TrimSpace(t.Name)
 	}
 }

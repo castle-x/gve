@@ -66,6 +66,32 @@ func TestSortVersions(t *testing.T) {
 	}
 }
 
+func TestBumpPatch(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{"1.2.3", "1.2.4", false},
+		{"0.0.0", "0.0.1", false},
+		{"v2.5.9", "2.5.10", false},
+		{"0.1.0", "0.1.1", false},
+		{"invalid", "", true},
+		{"1.2", "", true},
+	}
+
+	for _, tt := range tests {
+		got, err := BumpPatch(tt.input)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("BumpPatch(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			continue
+		}
+		if !tt.wantErr && got != tt.want {
+			t.Errorf("BumpPatch(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestResolveVersion(t *testing.T) {
 	available := []string{"1.0.0", "1.1.0", "1.2.0", "2.0.0"}
 

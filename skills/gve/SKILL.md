@@ -3,7 +3,7 @@ name: gve
 description: GVE（Go + Vite + Embed）全栈项目脚手架使用指南。覆盖 gve CLI 全部命令（init、dev、build、run、ui add/sync/diff、api add/generate/new、sync、status、doctor、registry build）、Thrift IDL 编写规范、UI/API 资产管理、项目目录约定、前端样式规范和开发工作流。当用户提到 gve、wk-ui、wk-api、gve.lock、thrift、api generate、Go embed、单二进制部署、UI 资产安装或 API 契约管理时使用。即使用户只提到 "生成 API"、"写 thrift"、"添加组件" 等模糊表述，只要上下文涉及 GVE 生态也应触发。
 ---
 
-# GVE 使用指南
+# GVE 使用指南（v2）
 
 **规范来源**：本 skill 的权威文档仅限本目录内文件（`SKILL.md`、`reference.md`、`thrift-spec.md`）。勿引用当前打开项目下的 `docs/` 或其它路径，否则在非 gve 仓库中会指向错误内容。
 
@@ -12,14 +12,14 @@ GVE 是一个 Go + Vite + embed 全栈脚手架，包含三个仓库：
 | 仓库 | 职责 |
 |------|------|
 | `gve` | 单一 CLI 工具（Go 实现） |
-| `wk-ui` (workstation-ui) | UI 资产库（组件包装 + 全局配置） |
+| `wk-ui` (workstation-ui) | UI 资产库：`scaffold/`（骨架）+ `ui/`（原子组件）+ `components/`（业务组件）+ `global/`（全局配置） |
 | `wk-api` (workstation-api) | API 契约库（仅 Thrift IDL） |
 
 ## 命令速查
 
 ```bash
 # 项目初始化
-gve init <project-name>           # 生成 Go 骨架 + 拉取 base-setup 前端框架
+gve init <project-name>           # 生成 Go 骨架 + 选择 scaffold 前端骨架
 
 # 日常开发
 gve dev                           # 并发启动 Air (Go) + Vite (前端)
@@ -27,11 +27,14 @@ gve build                         # 构建单二进制（内嵌 site/dist/）
 gve run                           # 后台运行（智能判断是否需要重新构建）
 gve run stop | restart | status | logs
 
-# UI 资产
-gve ui add <asset>[@version]      # 安装 UI 资产
-gve ui list                       # 列出已安装资产
-gve ui diff <asset>               # 对比本地与资产库的差异
+# UI 资产（支持 category 前缀）
+gve ui add <asset>[@version]      # 安装 UI 资产（如 ui/spinner、components/data-table）
+gve ui add <name>                 # 简写：自动搜索 ui/ → components/ → global/
+gve ui list                       # 按 category 分组列出已安装资产
+gve ui diff <asset>               # 对比本地与资产库的差异（支持 upgrade/keep/merge/skip）
 gve ui sync [asset]               # 升级到最新版（有本地改动时交互确认）
+gve ui push <name> [--version x.y.z] [--source dir] [--desc "..."] [--dry-run]
+                                  # 扫描 TSX import，自动生成 meta.json，发布到 wk-ui registry
 
 # API 契约
 gve api add <project>/<resource>[@version]   # 安装 API 契约
@@ -45,8 +48,54 @@ gve status                        # 显示所有资产的版本与可用更新
 gve doctor                        # 检查环境（Go ≥1.22、Node ≥18、pnpm、Git、Air）
 
 # 资产库维护（在 wk-ui 或 wk-api 目录执行）
-gve registry build                # 扫描 assets/ 自动生成 registry.json
+gve registry build                # 扫描 scaffold/ui/components/global/ 自动生成 registry.json
 ```
+
+---
+
+## wk-ui 仓库结构（v2）
+
+```
+wk-ui/
+├── registry.json                       # 版本索引（由 gve registry build 自动生成）
+│
+├── scaffold/                           # 模块1: 项目骨架
+│   ├── default/                        # 默认骨架（React + Tailwind + Vite）
+│   │   └── v1.0.0/
+│   │       ├── meta.json              # category: "scaffold", dest: "site"
+│   │       └── ...
+│   └── dashboard/                      # Dashboard 骨架（含侧栏 + 布局）
+│       └── v1.0.0/
+│
+├── ui/                                 # 模块2: 自研 UI 原子组件
+│   ├── spinner/
+│   │   └── v1.0.0/
+│   │       ├── meta.json
+│   │       └── spinner.tsx            # 纯 .tsx，禁止 .css
+│   └── input-group/
+│       └── v1.0.0/
+│
+├── components/                         # 模块3: 业务复杂组件
+│   └── data-table/
+│       └── v2.0.0/
+│           ├── meta.json              # 可声明 peerDeps
+│           └── data-table.tsx
+│
+└── global/                             # 模块4: 全局配置资产
+    └── theme/
+        └── v1.0.0/
+            ├── meta.json              # dest: "site/src/app/styles"
+            └── globals.css            # 唯一允许 .css 的 category
+```
+
+### 四模块说明
+
+| 目录 | 职责 | 安装时机 | 安装路径 |
+|------|------|---------|---------|
+| `scaffold/` | 项目骨架 | `gve init` 一次性 | 由 `dest` 指定（通常 `site/`） |
+| `ui/` | 纯 UI 原子（无业务逻辑） | `gve ui add` 按需 | `shared/wk/ui/{name}/` |
+| `components/` | 有业务逻辑的复合组件 | `gve ui add` 按需 | `shared/wk/components/{name}/` |
+| `global/` | 全局配置（CSS 变量、主题等） | `gve ui add` 按需 | 由 `dest` 指定 |
 
 ---
 
@@ -80,7 +129,7 @@ gve registry build                # 扫描 assets/ 自动生成 registry.json
 │       ├── {resource}.go
 │       └── client.go
 │
-└── site/                             # 前端（base-setup 初始化）
+└── site/                             # 前端（scaffold 初始化）
     ├── embed.go                      # go:embed all:dist（不修改）
     ├── package.json / pnpm-lock.yaml
     ├── vite.config.ts / tsconfig.json / biome.json / index.html
@@ -98,8 +147,12 @@ gve registry build                # 扫描 assets/ 自动生成 registry.json
         │
         ├── api/                      # ★ gve api generate 生成的 TS client
         │   └── {project}/{resource}/v{N}/client.ts
+        │
         └── shared/                   # ★ 跨 views 复用的代码
-            ├── ui/                   # ★ UI 资产（gve ui add 安装，禁止手写组件）
+            ├── shadcn/               # ★ shadcn/ui 组件（npx shadcn add 安装，扁平存放）
+            ├── wk/                   # ★ wk-ui 自研资产（gve ui add 安装）
+            │   ├── ui/              # UI 原子组件
+            │   └── components/      # 业务复杂组件
             ├── lib/                  # 工具函数（cn.ts、request.ts 等）
             ├── hooks/                # 通用 React hooks（可选）
             └── types/                # 共享 TypeScript 类型（可选）
@@ -123,7 +176,9 @@ gve registry build                # 扫描 assets/ 自动生成 registry.json
 |------|------|------|
 | `src/app/` | 框架初始化 | 写业务组件或逻辑 |
 | `src/views/{feature}/` | 页面及其私有组件 | 跨 feature 互相 import |
-| `src/shared/ui/` | UI 资产（gve 管理） | 手动在此目录创建组件 |
+| `src/shared/shadcn/` | shadcn/ui 组件（扁平存放） | 直接修改源码 |
+| `src/shared/wk/ui/` | wk-ui 原子组件 | 手动在此目录创建组件 |
+| `src/shared/wk/components/` | wk-ui 业务组件 | 手动在此目录创建组件 |
 | `src/shared/lib/` | 通用工具函数 | 包含业务逻辑 |
 | `src/shared/hooks/` | 通用 hooks（无业务状态） | 依赖特定 feature 的数据 |
 | `src/shared/types/` | 跨模块 TS 类型 | 包含运行时逻辑 |
@@ -138,7 +193,8 @@ gve registry build                # 扫描 assets/ 自动生成 registry.json
 ```bash
 gve init my-app
 cd my-app
-gve ui add button
+gve ui add ui/spinner
+gve ui add components/data-table    # 自动安装 peerDeps
 gve api add ai-worker/task@v1
 cd site && pnpm install && cd ..
 gve dev
@@ -153,14 +209,41 @@ gve sync          # 按 gve.lock 还原所有缺失资产
 ### 升级资产
 ```bash
 gve status                        # 查看哪些资产有更新
-gve ui sync button                # 升级（有本地改动时提示 overwrite/keep/diff）
-git add gve.lock site/src/shared/ui/button
-git commit -m "chore: upgrade button to v1.3.0"
+gve ui sync ui/spinner            # 升级（有本地改动时提示 upgrade/keep/merge/skip）
+git add gve.lock site/src/shared/wk/ui/spinner
+git commit -m "chore: upgrade ui/spinner to v1.1.0"
 ```
 
-### 发布 UI 资产新版本（在 wk-ui 仓库）
-1. 创建 `assets/{name}/v{x.y.z}/` 目录
-2. 编写 `meta.json` + 资产文件
+### 发布 UI 资产新版本（推荐：gve ui push）
+
+```bash
+# 在业务项目中，修改完组件后一键发布
+gve ui push spinner --version 1.1.0 --desc "Spinner with CVA variants"
+
+# 自动扫描 TSX import → 识别 npm deps + wk-ui peerDeps → 生成 meta.json → git commit + push
+# 流程：定位源目录 → 扫描 import → 确定版本 → 构建 meta → 发布到 registry → 更新 gve.lock
+
+# 不指定版本 → 自动从 gve.lock 当前版本 patch +1
+gve ui push spinner
+
+# 预览模式（不实际写入）
+gve ui push data-table --dry-run
+
+# 指定任意源目录
+gve ui push my-comp --source ./custom/path/ --version 1.0.0
+```
+
+**TSX Import 扫描器**会自动：
+- 识别 npm 依赖（如 `class-variance-authority`、`@tanstack/react-table`）→ 写入 meta.json `deps`
+- 识别 wk-ui 内部组件依赖（如 `@/shared/wk/ui/spinner`）→ 写入 meta.json `peerDeps`
+- 跳过相对路径、项目别名（`@/`）、静态资源（.css/.svg）、React 宿主依赖
+- 自动去除注释中的 import（block comment + line comment）
+
+### 发布 UI 资产（手动方式，在 wk-ui 仓库）
+
+> 仅在无法使用 `gve ui push` 时使用。
+1. 创建 `{category}/{name}/v{x.y.z}/` 目录（如 `ui/spinner/v1.1.0/`）
+2. 编写 `meta.json` + 资产文件（仅 `.tsx`，禁止 `.css`）
 3. 执行 `gve registry build` 更新 registry.json
 4. `git add . && git commit`
 
@@ -171,20 +254,22 @@ git commit -m "chore: upgrade button to v1.3.0"
 
 ---
 
-## gve.lock 格式
+## gve.lock 格式（v2）
 
 ```json
 {
-  "version": "1",
+  "version": "2",
   "ui": {
-    "registry": "git.local/workstation/ui",
+    "registry": "https://github.com/castle-x/wk-ui.git",
     "assets": {
-      "button": { "version": "1.2.0" },
-      "base-setup": { "version": "1.0.0" }
+      "scaffold/default": { "version": "1.0.0" },
+      "ui/spinner": { "version": "1.0.0" },
+      "components/data-table": { "version": "2.0.0" },
+      "global/theme": { "version": "1.0.0" }
     }
   },
   "api": {
-    "registry": "git.local/workstation/api",
+    "registry": "https://github.com/castle-x/wk-api.git",
     "assets": {
       "ai-worker/task": { "version": "v1" }
     }
@@ -192,13 +277,65 @@ git commit -m "chore: upgrade button to v1.3.0"
 }
 ```
 
-**规则**：`gve.lock` 始终提交 Git；`.gve/` 目录不提交。
+**规则**：
+- `gve.lock` 始终提交 Git
+- `.gve/` 目录不提交
+- v2 key 带 category 前缀（如 `"ui/spinner"` 而非 `"spinner"`）
+- GVE CLI 读取到 v1 lock 文件时自动升级为 v2 格式
+
+---
+
+## UI 资产规范（wk-ui 维护者）
+
+**meta.json 九字段：**
+
+```json
+{
+  "$schema": "https://gve.dev/schema/meta.json",
+  "name": "data-table",
+  "version": "2.0.0",
+  "category": "component",
+  "description": "Data table with sort, filter, pagination, row selection.",
+  "dest": "",
+  "deps": ["@tanstack/react-table"],
+  "peerDeps": ["ui/button", "ui/input-group", "ui/spinner"],
+  "files": ["data-table.tsx"]
+}
+```
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `$schema` | 否 | JSON Schema URL，IDE 自动补全 |
+| `name` | 是 | 与目录名一致 |
+| `version` | 是 | semver |
+| `category` | 否 | `"scaffold"` \| `"ui"` \| `"component"` \| `"global"`。可省略（从目录推导） |
+| `description` | 否 | 一句话描述，`gve ui list` 时展示 |
+| `dest` | 否 | 有 dest = 全局资产；无 dest = 按 category 决定安装位置 |
+| `deps` | 否 | npm 依赖，`gve ui add` 时自动写入项目 `package.json` |
+| `peerDeps` | 否 | wk-ui 内部组件间依赖（registry key，如 `"ui/button"`），安装时自动解析 |
+| `files` | 是 | 需复制的文件列表。**ui/ 和 components/ 禁止 .css 文件** |
+
+### 安装路径映射
+
+| category | 无 dest 时安装到 | 示例 |
+|----------|-----------------|------|
+| `scaffold` | 由 dest 指定（通常 `site/`） | `site/package.json`, `site/src/app/...` |
+| `ui` | `site/src/shared/wk/ui/{name}/` | `shared/wk/ui/spinner/spinner.tsx` |
+| `component` | `site/src/shared/wk/components/{name}/` | `shared/wk/components/data-table/data-table.tsx` |
+| `global` | 由 dest 指定 | `site/src/app/styles/globals.css` |
+
+### 样式硬约束
+
+- `ui/` 和 `components/` 资产 = 纯 `.tsx` 文件，**禁止附带 .css / .module.css**
+- 所有样式必须通过 Tailwind 类名写在 `.tsx` 中
+- 使用 `cn()` 合并类名，使用 `cva()` 管理变体
+- 唯一例外：`global/` 目录可包含 `.css`（其本质就是 CSS 配置）
 
 ---
 
 ## 前端样式规范（硬性约束）
 
-**三层隔离：Tailwind 优先 + CSS Modules 兜底 + `cn()` 合并**
+**纯 Tailwind，禁止独立 CSS 文件**
 
 ```tsx
 // 简单组件 — 纯 Tailwind
@@ -208,40 +345,22 @@ export const Button = ({ className, ...props }) =>
 ```
 
 ```tsx
-// 复杂组件 — Tailwind + CSS Modules
-import styles from './chart.module.css'
-export const Chart = ({ className }) =>
-  <div className={cn(styles.root, "w-full", className)} />
+// 复杂组件 — Tailwind + cva 变体
+import { cva, type VariantProps } from "class-variance-authority"
+const spinnerVariants = cva("animate-spin", {
+  variants: {
+    size: { sm: "h-4 w-4", md: "h-6 w-6", lg: "h-8 w-8" },
+  },
+  defaultVariants: { size: "md" },
+})
 ```
 
 **禁止**：
 - 全局裸选择器（`.title { }`）
-- 手写 `.css` 文件（只允许 `.module.css`）
+- 独立 `.css` 文件（包括 `.module.css`）
 - CSS-in-JS（Emotion / styled-components）
 
----
-
-## UI 资产规范（wk-ui 维护者）
-
-**meta.json 五字段：**
-
-```json
-{
-  "name": "data-table",
-  "version": "2.0.0",
-  "dest": "",
-  "deps": ["@tanstack/react-table"],
-  "files": ["data-table.tsx", "data-table.module.css"]
-}
-```
-
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `name` | 是 | 与目录名一致 |
-| `version` | 是 | semver |
-| `dest` | 否 | **有 dest = 全局资产**（安装到指定路径）；**无 dest = 组件**（安装到 `site/src/shared/ui/{name}/`） |
-| `deps` | 否 | npm 依赖，`gve ui add` 时自动写入项目 `package.json` |
-| `files` | 是 | 需复制的文件列表（不含 meta.json） |
+**唯一全局 CSS 文件**：`site/src/app/styles/globals.css`（CSS 变量 + Tailwind 入口）
 
 ---
 
@@ -250,7 +369,7 @@ export const Chart = ({ className }) =>
 **约定**：GVE 规范与参考仅以本 skill 所在目录中的文件为准，勿引用当前项目下的 `docs/` 或其它外部路径。
 
 - 完整架构、项目目录规范、工作流与 gve.lock：见本目录 [reference.md](reference.md)
-- wk-ui / wk-api 结构、registry.json、API 四文件规范、base-setup 内容：见本目录 [reference.md](reference.md)
+- wk-ui / wk-api 结构、registry.json、API 四文件规范、scaffold 内容：见本目录 [reference.md](reference.md)
 - Thrift IDL 编写规范、支持类型、Service 定义、完整示例：见本目录 [thrift-spec.md](thrift-spec.md)
 
 ## 可选扩展

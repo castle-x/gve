@@ -75,6 +75,17 @@ func SortVersions(versions []string) []string {
 	return result
 }
 
+// BumpPatch increments the patch component of a semver string.
+// "1.2.3" → "1.2.4", "v0.0.0" → "0.0.1".
+func BumpPatch(v string) (string, error) {
+	parsed, err := Parse(v)
+	if err != nil {
+		return "", err
+	}
+	parsed.Patch++
+	return parsed.String(), nil
+}
+
 // ResolveVersion resolves a version constraint against available versions.
 // Supports: "latest", exact match ("1.2.0"), caret ("^1.0.0"), tilde ("~1.2.0").
 func ResolveVersion(constraint string, available []string) (string, error) {

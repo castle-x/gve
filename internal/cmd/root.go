@@ -42,6 +42,7 @@ func init() {
 	uiCmd.AddCommand(newUIListCmd())
 	uiCmd.AddCommand(newUISyncCmd())
 	uiCmd.AddCommand(newUIDiffCmd())
+	uiCmd.AddCommand(newUIPushCmd())
 
 	apiCmd.AddCommand(newAPIAddCmd())
 	apiCmd.AddCommand(newAPISyncCmd())

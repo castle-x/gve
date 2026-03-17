@@ -52,8 +52,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scaffold: %w", err)
 	}
 
-	// Step 2: Initialize frontend from base-setup asset
-	fmt.Println("  Initializing frontend from base-setup asset...")
+	// Step 2: Initialize frontend from scaffold asset
+	fmt.Println("  Initializing frontend from scaffold asset...")
 	if err := initFrontend(projectDir, cfg); err != nil {
 		return fmt.Errorf("init frontend: %w", err)
 	}

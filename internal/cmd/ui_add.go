@@ -37,33 +37,76 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("update cache: %w", err)
 	}
 
-	fmt.Printf("Installing %s", name)
+	reg, err := mgr.GetRegistry("ui")
+	if err != nil {
+		return fmt.Errorf("load registry: %w", err)
+	}
+
+	// Resolve shortname to full key
+	fullName, ok := reg.ResolveAssetName(name)
+	if !ok {
+		return fmt.Errorf("asset %q not found in registry. Try: gve ui add ui/%s or components/%s", name, name, name)
+	}
+
+	fmt.Printf("Installing %s", fullName)
 	if version != "" {
 		fmt.Printf("@%s", version)
 	}
 	fmt.Println("...")
 
-	installedVer, err := asset.InstallUIAsset(mgr, name, version, projectDir)
+	installedVer, err := asset.InstallUIAsset(mgr, fullName, version, projectDir)
 	if err != nil {
-		return fmt.Errorf("install %s: %w", name, err)
+		return fmt.Errorf("install %s: %w", fullName, err)
 	}
 
-	// Update gve.lock
+	// Load lock and track installed assets
 	lockPath := filepath.Join(projectDir, "gve.lock")
 	lf, err := lock.Load(lockPath)
 	if err != nil {
 		return fmt.Errorf("load gve.lock: %w", err)
 	}
-	lf.SetUIAsset(name, installedVer)
+	lf.SetUIAsset(fullName, installedVer)
+
+	// Resolve peerDeps
+	assetPath := ""
+	if version == "" || version == "latest" {
+		_, assetPath, _ = reg.GetLatest(fullName)
+	} else {
+		assetPath, _ = reg.GetVersion(fullName, version)
+	}
+	if assetPath != "" {
+		meta, _ := asset.LoadMeta(filepath.Join(mgr.GetAssetDir("ui", assetPath), "meta.json"))
+		if meta != nil && len(meta.PeerDeps) > 0 {
+			installed := make(map[string]bool)
+			for k := range lf.UI.Assets {
+				installed[k] = true
+			}
+			installed[fullName] = true
+
+			missing := asset.ResolvePeerDeps(meta, installed)
+			for _, dep := range missing {
+				fmt.Printf("  → peerDep %s: installing...\n", dep)
+				depVer, err := asset.InstallUIAsset(mgr, dep, "", projectDir)
+				if err != nil {
+					fmt.Printf("  → peerDep %s: failed: %v\n", dep, err)
+					continue
+				}
+				lf.SetUIAsset(dep, depVer)
+				fmt.Printf("  → peerDep %s: installed v%s\n", dep, depVer)
+			}
+		}
+	}
+
 	if err := lf.Save(lockPath); err != nil {
 		return fmt.Errorf("save gve.lock: %w", err)
 	}
 
-	fmt.Printf("✓ Installed %s@%s\n", name, installedVer)
+	fmt.Printf("✓ Installed %s@%s\n", fullName, installedVer)
 	return nil
 }
 
 // parseAssetArg splits "button@1.2.0" into ("button", "1.2.0").
+// Also handles "ui/button@1.2.0" -> ("ui/button", "1.2.0").
 // If no @ is present, version is empty (meaning latest).
 func parseAssetArg(arg string) (name, version string) {
 	if idx := strings.LastIndex(arg, "@"); idx > 0 {

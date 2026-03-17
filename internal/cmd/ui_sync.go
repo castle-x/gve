@@ -89,12 +89,20 @@ func runUISync(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		var localDir string
-		if meta.Dest != "" {
-			localDir = filepath.Join(projectDir, meta.Dest)
-		} else {
-			localDir = filepath.Join(projectDir, "site", "src", "shared", "ui", name)
+		// Use v2 category-aware path resolution
+		category := meta.Category
+		if category == "" {
+			category = asset.InferCategory(ve.Path)
 		}
+		bareName := meta.Name
+		if bareName == "" {
+			if idx := strings.LastIndex(name, "/"); idx >= 0 {
+				bareName = name[idx+1:]
+			} else {
+				bareName = name
+			}
+		}
+		localDir := filepath.Join(projectDir, asset.GetInstallPath(category, bareName, meta.Dest))
 
 		hasChanges := asset.HasLocalChanges(localDir, cacheDir, meta.Files)
 
@@ -105,8 +113,8 @@ func runUISync(cmd *cobra.Command, args []string) error {
 			action := promptSyncAction()
 
 			switch action {
-			case "o":
-				// overwrite
+			case "o", "u":
+				// overwrite / upgrade
 			case "d":
 				diffs, _ := asset.DiffAsset(localDir, cacheDir, meta.Files)
 				for _, d := range diffs {
@@ -120,7 +128,7 @@ func runUISync(cmd *cobra.Command, args []string) error {
 					skipped++
 					continue
 				}
-			case "k":
+			case "k", "s":
 				fmt.Printf("  Skipped %s\n", name)
 				skipped++
 				continue
@@ -150,9 +158,10 @@ func runUISync(cmd *cobra.Command, args []string) error {
 
 func promptSyncAction() string {
 	fmt.Println("  Options:")
-	fmt.Println("    [o] overwrite — discard local changes, install new version")
-	fmt.Println("    [d] diff      — show diff, then decide")
-	fmt.Println("    [k] keep      — skip this asset")
+	fmt.Println("    [u] upgrade  — discard local changes, install new version")
+	fmt.Println("    [d] diff     — show diff, then decide")
+	fmt.Println("    [k] keep     — skip this asset")
+	fmt.Println("    [s] skip     — skip this asset")
 	fmt.Print("  > ")
 
 	reader := bufio.NewReader(os.Stdin)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
@@ -109,12 +110,20 @@ func assetExists(name, version string, reg asset.Registry, mgr *asset.Manager, p
 		return false
 	}
 
-	var destDir string
-	if meta.Dest != "" {
-		destDir = filepath.Join(projectDir, meta.Dest)
-	} else {
-		destDir = filepath.Join(projectDir, "site", "src", "shared", "ui", name)
+	// Use v2 category-aware path resolution
+	category := meta.Category
+	if category == "" {
+		category = asset.InferCategory(ve.Path)
 	}
+	bareName := meta.Name
+	if bareName == "" {
+		if idx := strings.LastIndex(name, "/"); idx >= 0 {
+			bareName = name[idx+1:]
+		} else {
+			bareName = name
+		}
+	}
+	destDir := filepath.Join(projectDir, asset.GetInstallPath(category, bareName, meta.Dest))
 
 	// Check if the first file exists as a proxy
 	if len(meta.Files) > 0 {

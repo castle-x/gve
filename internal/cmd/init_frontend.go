@@ -24,17 +24,40 @@ func initFrontend(projectDir string, cfg *config.Config) error {
 		return fmt.Errorf("load ui registry: %w", err)
 	}
 
-	// Get latest base-setup
-	ver, assetPath, err := reg.GetLatest("base-setup")
+	// Find scaffolds from registry
+	scaffolds := reg.ListByCategory("scaffold")
+	var scaffoldKey string
+	if len(scaffolds) == 0 {
+		// Fallback to v1 base-setup
+		scaffoldKey = "base-setup"
+	} else if len(scaffolds) == 1 {
+		scaffoldKey = scaffolds[0]
+	} else {
+		// Default to scaffold/default if available
+		scaffoldKey = "scaffold/default"
+		found := false
+		for _, s := range scaffolds {
+			if s == scaffoldKey {
+				found = true
+				break
+			}
+		}
+		if !found {
+			scaffoldKey = scaffolds[0]
+		}
+	}
+
+	// Get latest version
+	ver, assetPath, err := reg.GetLatest(scaffoldKey)
 	if err != nil {
-		return fmt.Errorf("get base-setup: %w", err)
+		return fmt.Errorf("get %s: %w", scaffoldKey, err)
 	}
 
 	// Load meta.json
 	metaPath := filepath.Join(mgr.GetAssetDir("ui", assetPath), "meta.json")
 	meta, err := asset.LoadMeta(metaPath)
 	if err != nil {
-		return fmt.Errorf("load base-setup meta: %w", err)
+		return fmt.Errorf("load %s meta: %w", scaffoldKey, err)
 	}
 
 	// Determine destination
@@ -47,13 +70,15 @@ func initFrontend(projectDir string, cfg *config.Config) error {
 	// Copy files
 	srcDir := mgr.GetAssetDir("ui", assetPath)
 	if err := asset.CopyAsset(srcDir, destDir, meta.Files); err != nil {
-		return fmt.Errorf("copy base-setup: %w", err)
+		return fmt.Errorf("copy %s: %w", scaffoldKey, err)
 	}
 
-	// Create placeholder directories
+	// Create v2 placeholder directories
 	placeholders := []string{
 		filepath.Join(destDir, "src", "views"),
-		filepath.Join(destDir, "src", "shared", "ui"),
+		filepath.Join(destDir, "src", "shared", "wk", "ui"),
+		filepath.Join(destDir, "src", "shared", "wk", "components"),
+		filepath.Join(destDir, "src", "shared", "shadcn"),
 	}
 	for _, dir := range placeholders {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -71,7 +96,7 @@ func initFrontend(projectDir string, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("load gve.lock: %w", err)
 	}
-	lf.SetUIAsset("base-setup", ver)
+	lf.SetUIAsset(scaffoldKey, ver)
 	if err := lf.Save(lockPath); err != nil {
 		return fmt.Errorf("save gve.lock: %w", err)
 	}

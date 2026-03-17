@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
@@ -66,12 +67,22 @@ func runUIDiff(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load meta: %w", err)
 	}
 
-	var localDir string
-	if meta.Dest != "" {
-		localDir = filepath.Join(projectDir, meta.Dest)
-	} else {
-		localDir = filepath.Join(projectDir, "site", "src", "shared", "ui", assetName)
+	// Use v2 category-aware path resolution
+	category := meta.Category
+	if category == "" {
+		category = asset.InferCategory(ve.Path)
 	}
+	bareName := meta.Name
+	if bareName == "" {
+		// Extract from asset name
+		if idx := strings.LastIndex(assetName, "/"); idx >= 0 {
+			bareName = assetName[idx+1:]
+		} else {
+			bareName = assetName
+		}
+	}
+	installPath := asset.GetInstallPath(category, bareName, meta.Dest)
+	localDir := filepath.Join(projectDir, installPath)
 
 	diffs, err := asset.DiffAsset(localDir, cacheDir, meta.Files)
 	if err != nil {

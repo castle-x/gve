@@ -3,6 +3,7 @@ package lock
 import (
 	"encoding/json"
 	"os"
+	"strings"
 )
 
 type AssetEntry struct {
@@ -22,7 +23,7 @@ type LockFile struct {
 
 func New(uiRegistry, apiRegistry string) *LockFile {
 	return &LockFile{
-		Version: "1",
+		Version: "2",
 		UI: AssetGroup{
 			Registry: uiRegistry,
 			Assets:   make(map[string]AssetEntry),
@@ -49,7 +50,37 @@ func Load(path string) (*LockFile, error) {
 	if lf.API.Assets == nil {
 		lf.API.Assets = make(map[string]AssetEntry)
 	}
+
+	if lf.Version == "1" || lf.Version == "" {
+		migrateV1ToV2(&lf)
+	}
+
 	return &lf, nil
+}
+
+// migrateV1ToV2 converts v1 lock keys to v2 category-prefixed keys.
+func migrateV1ToV2(lf *LockFile) {
+	migrated := make(map[string]AssetEntry, len(lf.UI.Assets))
+	for key, entry := range lf.UI.Assets {
+		newKey := migrateAssetKey(key)
+		migrated[newKey] = entry
+	}
+	lf.UI.Assets = migrated
+	lf.Version = "2"
+}
+
+// migrateAssetKey converts a v1 bare key to a v2 category-prefixed key.
+func migrateAssetKey(key string) string {
+	// Already has a category prefix
+	if strings.Contains(key, "/") {
+		return key
+	}
+	// Special case: base-setup -> scaffold/default
+	if key == "base-setup" {
+		return "scaffold/default"
+	}
+	// Default: assume ui/ prefix
+	return "ui/" + key
 }
 
 func (lf *LockFile) Save(path string) error {

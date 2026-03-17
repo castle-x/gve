@@ -8,6 +8,20 @@ import (
 	"sort"
 )
 
+// ResolvePeerDeps returns the list of peerDeps from meta that are not yet installed.
+func ResolvePeerDeps(meta *Meta, installed map[string]bool) []string {
+	if len(meta.PeerDeps) == 0 {
+		return nil
+	}
+	var missing []string
+	for _, dep := range meta.PeerDeps {
+		if !installed[dep] {
+			missing = append(missing, dep)
+		}
+	}
+	return missing
+}
+
 // GetInstallPath returns the project-relative install directory for an asset.
 func GetInstallPath(category, name, dest string) string {
 	if dest != "" {

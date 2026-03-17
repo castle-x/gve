@@ -234,3 +234,52 @@ func TestGetInstallPath(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePeerDeps(t *testing.T) {
+	tests := []struct {
+		name      string
+		peerDeps  []string
+		installed map[string]bool
+		want      []string
+	}{
+		{
+			name:      "all missing",
+			peerDeps:  []string{"ui/button", "ui/spinner"},
+			installed: map[string]bool{},
+			want:      []string{"ui/button", "ui/spinner"},
+		},
+		{
+			name:      "some installed",
+			peerDeps:  []string{"ui/button", "ui/spinner"},
+			installed: map[string]bool{"ui/button": true},
+			want:      []string{"ui/spinner"},
+		},
+		{
+			name:      "all installed",
+			peerDeps:  []string{"ui/button", "ui/spinner"},
+			installed: map[string]bool{"ui/button": true, "ui/spinner": true},
+			want:      nil,
+		},
+		{
+			name:      "no peerDeps",
+			peerDeps:  nil,
+			installed: map[string]bool{},
+			want:      nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			meta := &Meta{PeerDeps: tt.peerDeps}
+			got := ResolvePeerDeps(meta, tt.installed)
+			if len(got) != len(tt.want) {
+				t.Errorf("ResolvePeerDeps() = %v, want %v", got, tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ResolvePeerDeps()[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}

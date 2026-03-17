@@ -49,6 +49,11 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 
 		for name, entry := range lf.UI.Assets {
+			// scaffold assets are only used during init, skip during sync
+			if strings.HasPrefix(name, "scaffold/") {
+				continue
+			}
+
 			if assetExists(name, entry.Version, reg, mgr, projectDir) {
 				skipped++
 				continue

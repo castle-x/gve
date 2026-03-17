@@ -63,6 +63,11 @@ func runUISync(cmd *cobra.Command, args []string) error {
 	var upgraded, skipped int
 
 	for _, name := range targets {
+		// scaffold assets are only used during init, skip during sync
+		if strings.HasPrefix(name, "scaffold/") {
+			continue
+		}
+
 		entry, ok := lf.UI.Assets[name]
 		if !ok {
 			fmt.Printf("  %s: not installed, skipping\n", name)

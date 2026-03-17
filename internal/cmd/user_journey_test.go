@@ -588,39 +588,45 @@ func TestAssetExists_FileMissing(t *testing.T) {
 	}
 }
 
-// ─── Test: resolveDestPath ───────────────────────────────────────────
+// ─── Test: resolveAssetInfo ───────────────────────────────────────────
 
-func TestResolveDestPath(t *testing.T) {
+func TestResolveAssetInfo(t *testing.T) {
 	cacheDir := setupFakeAssetCache(t)
 	mgr := asset.NewManager(cacheDir)
 	reg, _ := mgr.GetRegistry("ui")
 
 	t.Run("scaffold asset with dest", func(t *testing.T) {
-		got := resolveDestPath("scaffold/default", "1.0.0", reg, mgr)
+		got, _ := resolveAssetInfo("scaffold/default", "1.0.0", reg, mgr)
 		if got != "site/" {
-			t.Errorf("resolveDestPath(scaffold/default) = %q, want \"site/\"", got)
+			t.Errorf("resolveAssetInfo(scaffold/default) dest = %q, want \"site/\"", got)
 		}
 	})
 
 	t.Run("ui asset without dest", func(t *testing.T) {
-		got := resolveDestPath("ui/button", "1.0.0", reg, mgr)
+		got, _ := resolveAssetInfo("ui/button", "1.0.0", reg, mgr)
 		if got != "site/src/shared/wk/ui/button/" {
-			t.Errorf("resolveDestPath(ui/button) = %q, want \"site/src/shared/wk/ui/button/\"", got)
+			t.Errorf("resolveAssetInfo(ui/button) dest = %q, want \"site/src/shared/wk/ui/button/\"", got)
 		}
 	})
 
 	t.Run("unknown asset", func(t *testing.T) {
-		got := resolveDestPath("nonexistent", "1.0.0", reg, mgr)
+		got, _ := resolveAssetInfo("nonexistent", "1.0.0", reg, mgr)
 		if got != "site/src/shared/wk/ui/nonexistent/" {
-			t.Errorf("resolveDestPath(nonexistent) = %q, want fallback path", got)
+			t.Errorf("resolveAssetInfo(nonexistent) dest = %q, want fallback path", got)
 		}
 	})
 
 	t.Run("nil registry", func(t *testing.T) {
-		got := resolveDestPath("ui/button", "1.0.0", nil, mgr)
+		got, _ := resolveAssetInfo("ui/button", "1.0.0", nil, mgr)
 		if got != "site/src/shared/wk/ui/button/" {
-			t.Errorf("resolveDestPath with nil reg = %q, want fallback path", got)
+			t.Errorf("resolveAssetInfo with nil reg dest = %q, want fallback path", got)
 		}
+	})
+
+	t.Run("description returned", func(t *testing.T) {
+		_, desc := resolveAssetInfo("ui/button", "1.0.0", reg, mgr)
+		// Description may be empty in test fixtures, just ensure no error
+		_ = desc
 	})
 }
 

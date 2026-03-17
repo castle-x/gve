@@ -16,6 +16,9 @@ type Meta struct {
 	Deps        []string `json:"deps,omitempty"`
 	PeerDeps    []string `json:"peerDeps,omitempty"`
 	Files       []string `json:"files"`
+	// ── scaffold 专用字段 ──
+	DefaultAssets []string `json:"defaultAssets,omitempty"` // 骨架默认安装的 wk 组件 key 列表
+	ShadcnDeps   []string `json:"shadcnDeps,omitempty"`    // 骨架依赖的 shadcn 组件名列表
 }
 
 func LoadMeta(path string) (*Meta, error) {

@@ -49,16 +49,12 @@ func runDev(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Auto-run pnpm install if node_modules is missing.
+	// Auto-run npm install if node_modules is missing.
 	nodeModules := filepath.Join(siteDir, "node_modules")
 	if _, err := os.Stat(nodeModules); os.IsNotExist(err) {
-		fmt.Println("  node_modules not found, running pnpm install...")
-		installCmd := exec.Command("pnpm", "install")
-		installCmd.Dir = siteDir
-		installCmd.Stdout = os.Stdout
-		installCmd.Stderr = os.Stderr
-		if err := installCmd.Run(); err != nil {
-			return fmt.Errorf("pnpm install failed: %w", err)
+		fmt.Println("  node_modules not found, running install...")
+		if err := runNodeInstall(siteDir); err != nil {
+			return fmt.Errorf("install dependencies: %w", err)
 		}
 		fmt.Println()
 	}
@@ -75,8 +71,9 @@ func runDev(cmd *cobra.Command, args []string) error {
 	viteErrWriter := runner.NewPrefixedWriter(os.Stderr, "\033[35m[vite]\033[0m")
 
 	goOpts := buildGoDevOpts(projectDir, port)
+	pm := detectPackageManager(siteDir)
 	viteOpts := runner.CommandOpts{
-		Name: "pnpm",
+		Name: pm,
 		Args: []string{"dev", "--port", fmt.Sprintf("%d", vitePort)},
 		Dir:  siteDir,
 	}

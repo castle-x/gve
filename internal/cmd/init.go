@@ -60,7 +60,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Step 2: Initialize frontend from scaffold asset
 	scaffoldKey := "scaffold/" + scaffoldName
 	fmt.Printf("  Initializing frontend from %s...\n", scaffoldKey)
-	if err := initFrontend(projectDir, cfg, scaffoldKey); err != nil {
+	if err := initFrontend(projectDir, projectName, cfg, scaffoldKey); err != nil {
 		return fmt.Errorf("init frontend: %w", err)
 	}
 

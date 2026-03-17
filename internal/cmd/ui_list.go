@@ -72,8 +72,11 @@ func runUIList(cmd *cobra.Command, args []string) error {
 		fmt.Println(cat.label)
 		for _, name := range names {
 			entry := lf.UI.Assets[name]
-			dest := resolveDestPath(name, entry.Version, reg, mgr)
+			dest, desc := resolveAssetInfo(name, entry.Version, reg, mgr)
 			fmt.Printf("  %-30s v%-10s %s\n", name, entry.Version, dest)
+			if desc != "" {
+				fmt.Printf("    %s\n", desc)
+			}
 		}
 		printed = true
 	}
@@ -100,15 +103,19 @@ func runUIList(cmd *cobra.Command, args []string) error {
 		fmt.Println("OTHER")
 		for _, name := range uncategorized {
 			entry := lf.UI.Assets[name]
-			dest := resolveDestPath(name, entry.Version, reg, mgr)
+			dest, desc := resolveAssetInfo(name, entry.Version, reg, mgr)
 			fmt.Printf("  %-30s v%-10s %s\n", name, entry.Version, dest)
+			if desc != "" {
+				fmt.Printf("    %s\n", desc)
+			}
 		}
 	}
 
 	return nil
 }
 
-func resolveDestPath(name, version string, reg asset.Registry, mgr *asset.Manager) string {
+// resolveAssetInfo returns the destination path and description for an asset.
+func resolveAssetInfo(name, version string, reg asset.Registry, mgr *asset.Manager) (dest, description string) {
 	if reg == nil {
 		// Fallback: derive from name pattern
 		category := asset.InferCategory(name)
@@ -118,9 +125,9 @@ func resolveDestPath(name, version string, reg asset.Registry, mgr *asset.Manage
 		}
 		path := asset.GetInstallPath(category, bareName, "")
 		if path != "" {
-			return path + "/"
+			return path + "/", ""
 		}
-		return ""
+		return "", ""
 	}
 
 	info, ok := reg[name]
@@ -133,20 +140,20 @@ func resolveDestPath(name, version string, reg asset.Registry, mgr *asset.Manage
 		}
 		path := asset.GetInstallPath(category, bareName, "")
 		if path != "" {
-			return path + "/"
+			return path + "/", ""
 		}
-		return ""
+		return "", ""
 	}
 
 	ve, ok := info.Versions[version]
 	if !ok {
-		return ""
+		return "", ""
 	}
 
 	metaPath := filepath.Join(mgr.GetAssetDir("ui", ve.Path), "meta.json")
 	meta, err := asset.LoadMeta(metaPath)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 
 	category := meta.Category
@@ -155,7 +162,7 @@ func resolveDestPath(name, version string, reg asset.Registry, mgr *asset.Manage
 	}
 	path := asset.GetInstallPath(category, meta.Name, meta.Dest)
 	if path != "" {
-		return path + "/"
+		return path + "/", meta.Description
 	}
-	return ""
+	return "", meta.Description
 }

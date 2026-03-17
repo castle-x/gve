@@ -57,23 +57,13 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 	// Step 1: Frontend build
 	fmt.Println("Building frontend...")
-	if err := runner.RunCommand(ctx, runner.CommandOpts{
-		Name: "pnpm",
-		Args: []string{"install", "--frozen-lockfile"},
-		Dir:  siteDir,
-	}, os.Stdout, os.Stderr); err != nil {
-		// Retry without --frozen-lockfile (pnpm-lock.yaml may not exist yet)
-		if err2 := runner.RunCommand(ctx, runner.CommandOpts{
-			Name: "pnpm",
-			Args: []string{"install"},
-			Dir:  siteDir,
-		}, os.Stdout, os.Stderr); err2 != nil {
-			return fmt.Errorf("pnpm install failed: %w", err2)
-		}
+	if err := runNodeInstall(siteDir); err != nil {
+		return fmt.Errorf("install dependencies: %w", err)
 	}
 
+	pm := detectPackageManager(siteDir)
 	if err := runner.RunCommand(ctx, runner.CommandOpts{
-		Name: "pnpm",
+		Name: pm,
 		Args: []string{"build"},
 		Dir:  siteDir,
 	}, os.Stdout, os.Stderr); err != nil {

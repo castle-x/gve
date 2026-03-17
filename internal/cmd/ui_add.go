@@ -54,10 +54,12 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("...")
 
-	installedVer, err := asset.InstallUIAsset(mgr, fullName, version, projectDir)
+	installedResult, err := asset.InstallUIAssetFull(mgr, fullName, version, projectDir)
 	if err != nil {
 		return fmt.Errorf("install %s: %w", fullName, err)
 	}
+	installedVer := installedResult.InstalledVersion
+	depsInjected := installedResult.DepsInjected
 
 	// Load lock and track installed assets
 	lockPath := filepath.Join(projectDir, "gve.lock")
@@ -67,38 +69,39 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 	}
 	lf.SetUIAsset(fullName, installedVer)
 
-	// Resolve peerDeps
-	assetPath := ""
-	if version == "" || version == "latest" {
-		_, assetPath, _ = reg.GetLatest(fullName)
-	} else {
-		assetPath, _ = reg.GetVersion(fullName, version)
+	// Resolve peerDeps recursively
+	installed := make(map[string]bool)
+	for k := range lf.UI.Assets {
+		installed[k] = true
 	}
-	if assetPath != "" {
-		meta, _ := asset.LoadMeta(filepath.Join(mgr.GetAssetDir("ui", assetPath), "meta.json"))
-		if meta != nil && len(meta.PeerDeps) > 0 {
-			installed := make(map[string]bool)
-			for k := range lf.UI.Assets {
-				installed[k] = true
-			}
-			installed[fullName] = true
+	installed[fullName] = true
 
-			missing := asset.ResolvePeerDeps(meta, installed)
-			for _, dep := range missing {
-				fmt.Printf("  → peerDep %s: installing...\n", dep)
-				depVer, err := asset.InstallUIAsset(mgr, dep, "", projectDir)
-				if err != nil {
-					fmt.Printf("  → peerDep %s: failed: %v\n", dep, err)
-					continue
-				}
-				lf.SetUIAsset(dep, depVer)
-				fmt.Printf("  → peerDep %s: installed v%s\n", dep, depVer)
-			}
+	peerDeps, err := asset.ResolvePeerDepsRecursive(mgr, fullName, installed, 5)
+	if err != nil {
+		fmt.Printf("  ⚠ peerDeps resolution failed: %v\n", err)
+	}
+	for _, dep := range peerDeps {
+		fmt.Printf("  → peerDep %s: installing...\n", dep)
+		depVer, err := asset.InstallUIAsset(mgr, dep, "", projectDir)
+		if err != nil {
+			fmt.Printf("  → peerDep %s: failed: %v\n", dep, err)
+			continue
 		}
+		lf.SetUIAsset(dep, depVer)
+		fmt.Printf("  → peerDep %s: installed v%s\n", dep, depVer)
 	}
 
 	if err := lf.Save(lockPath); err != nil {
 		return fmt.Errorf("save gve.lock: %w", err)
+	}
+
+	// Auto-run npm install if new deps were injected
+	if depsInjected {
+		siteDir := filepath.Join(projectDir, "site")
+		fmt.Println("  New npm dependencies detected, running install...")
+		if err := runNodeInstall(siteDir); err != nil {
+			fmt.Printf("  ⚠ npm install failed: %v\n", err)
+		}
 	}
 
 	fmt.Printf("✓ Installed %s@%s\n", fullName, installedVer)

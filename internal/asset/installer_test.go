@@ -283,3 +283,236 @@ func TestResolvePeerDeps(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDep(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantName    string
+		wantVersion string
+	}{
+		{"lucide-react@^0.300.0", "lucide-react", "^0.300.0"},
+		{"@radix-ui/react-slot@^1.0.0", "@radix-ui/react-slot", "^1.0.0"},
+		{"sonner", "sonner", "latest"},
+		{"react", "react", "latest"},
+		{"@tanstack/react-table", "@tanstack/react-table", "latest"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			name, version := parseDep(tt.input)
+			if name != tt.wantName {
+				t.Errorf("parseDep(%q) name = %q, want %q", tt.input, name, tt.wantName)
+			}
+			if version != tt.wantVersion {
+				t.Errorf("parseDep(%q) version = %q, want %q", tt.input, version, tt.wantVersion)
+			}
+		})
+	}
+}
+
+func TestInjectDeps_WithVersions(t *testing.T) {
+	dir := t.TempDir()
+	pkgPath := filepath.Join(dir, "package.json")
+	os.WriteFile(pkgPath, []byte(`{"name":"app","dependencies":{"react":"^19.0.0"}}`), 0644)
+
+	deps := []string{"lucide-react@^0.300.0", "sonner", "@radix-ui/react-slot@^1.0.0"}
+	changed, err := injectDeps(pkgPath, deps)
+	if err != nil {
+		t.Fatalf("injectDeps: %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when new deps are injected")
+	}
+
+	data, _ := os.ReadFile(pkgPath)
+	var pkg map[string]interface{}
+	json.Unmarshal(data, &pkg)
+	depsMap := pkg["dependencies"].(map[string]interface{})
+
+	if depsMap["lucide-react"] != "^0.300.0" {
+		t.Errorf("lucide-react = %v, want ^0.300.0", depsMap["lucide-react"])
+	}
+	if depsMap["sonner"] != "latest" {
+		t.Errorf("sonner = %v, want latest", depsMap["sonner"])
+	}
+	if depsMap["@radix-ui/react-slot"] != "^1.0.0" {
+		t.Errorf("@radix-ui/react-slot = %v, want ^1.0.0", depsMap["@radix-ui/react-slot"])
+	}
+	// Existing dep should not be overwritten
+	if depsMap["react"] != "^19.0.0" {
+		t.Errorf("react = %v, want ^19.0.0 (should not be overwritten)", depsMap["react"])
+	}
+}
+
+func TestResolvePeerDepsRecursive_LinearChain(t *testing.T) {
+	// Setup: A depends on B, B depends on C
+	tmp := t.TempDir()
+	cacheDir := filepath.Join(tmp, "cache")
+	regDir := filepath.Join(cacheDir, "ui")
+	os.MkdirAll(regDir, 0755)
+
+	reg := Registry{
+		"ui/a": AssetInfo{
+			Latest:   "1.0.0",
+			Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/a/v1.0.0"}},
+		},
+		"ui/b": AssetInfo{
+			Latest:   "1.0.0",
+			Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/b/v1.0.0"}},
+		},
+		"ui/c": AssetInfo{
+			Latest:   "1.0.0",
+			Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/c/v1.0.0"}},
+		},
+	}
+	regData, _ := json.MarshalIndent(reg, "", "  ")
+	os.WriteFile(filepath.Join(regDir, "registry.json"), regData, 0644)
+
+	// Create meta files
+	mkMeta := func(name string, peerDeps []string) {
+		dir := filepath.Join(regDir, "ui", name, "v1.0.0")
+		os.MkdirAll(dir, 0755)
+		m := Meta{Name: name, Version: "1.0.0", Category: "ui", PeerDeps: peerDeps, Files: []string{name + ".tsx"}}
+		data, _ := json.Marshal(m)
+		os.WriteFile(filepath.Join(dir, "meta.json"), data, 0644)
+		os.WriteFile(filepath.Join(dir, name+".tsx"), []byte("export default null"), 0644)
+	}
+
+	mkMeta("a", []string{"ui/b"})
+	mkMeta("b", []string{"ui/c"})
+	mkMeta("c", nil)
+
+	mgr := NewManager(cacheDir)
+	installed := map[string]bool{}
+
+	result, err := ResolvePeerDepsRecursive(mgr, "ui/a", installed, 5)
+	if err != nil {
+		t.Fatalf("ResolvePeerDepsRecursive: %v", err)
+	}
+
+	// Should return [c, b] (topological: leaf first)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 deps, got %d: %v", len(result), result)
+	}
+	if result[0] != "ui/c" || result[1] != "ui/b" {
+		t.Errorf("got %v, want [ui/c, ui/b]", result)
+	}
+}
+
+func TestResolvePeerDepsRecursive_DiamondDependency(t *testing.T) {
+	// A → B → D, A → C → D (D should appear only once)
+	tmp := t.TempDir()
+	cacheDir := filepath.Join(tmp, "cache")
+	regDir := filepath.Join(cacheDir, "ui")
+	os.MkdirAll(regDir, 0755)
+
+	reg := Registry{
+		"ui/a": AssetInfo{Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/a/v1.0.0"}}},
+		"ui/b": AssetInfo{Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/b/v1.0.0"}}},
+		"ui/c": AssetInfo{Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/c/v1.0.0"}}},
+		"ui/d": AssetInfo{Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/d/v1.0.0"}}},
+	}
+	regData, _ := json.MarshalIndent(reg, "", "  ")
+	os.WriteFile(filepath.Join(regDir, "registry.json"), regData, 0644)
+
+	mkMeta := func(name string, peerDeps []string) {
+		dir := filepath.Join(regDir, "ui", name, "v1.0.0")
+		os.MkdirAll(dir, 0755)
+		m := Meta{Name: name, Version: "1.0.0", Category: "ui", PeerDeps: peerDeps, Files: []string{name + ".tsx"}}
+		data, _ := json.Marshal(m)
+		os.WriteFile(filepath.Join(dir, "meta.json"), data, 0644)
+		os.WriteFile(filepath.Join(dir, name+".tsx"), []byte("export default null"), 0644)
+	}
+
+	mkMeta("a", []string{"ui/b", "ui/c"})
+	mkMeta("b", []string{"ui/d"})
+	mkMeta("c", []string{"ui/d"})
+	mkMeta("d", nil)
+
+	mgr := NewManager(cacheDir)
+	result, err := ResolvePeerDepsRecursive(mgr, "ui/a", map[string]bool{}, 5)
+	if err != nil {
+		t.Fatalf("ResolvePeerDepsRecursive: %v", err)
+	}
+
+	// D should appear exactly once
+	dCount := 0
+	for _, r := range result {
+		if r == "ui/d" {
+			dCount++
+		}
+	}
+	if dCount != 1 {
+		t.Errorf("ui/d appears %d times, want 1. result: %v", dCount, result)
+	}
+
+	// Should have 3 items total: b, c, d
+	if len(result) != 3 {
+		t.Errorf("expected 3 deps, got %d: %v", len(result), result)
+	}
+}
+
+func TestResolvePeerDepsRecursive_CycleDetection(t *testing.T) {
+	// A → B → A (cycle)
+	tmp := t.TempDir()
+	cacheDir := filepath.Join(tmp, "cache")
+	regDir := filepath.Join(cacheDir, "ui")
+	os.MkdirAll(regDir, 0755)
+
+	reg := Registry{
+		"ui/a": AssetInfo{Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/a/v1.0.0"}}},
+		"ui/b": AssetInfo{Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/b/v1.0.0"}}},
+	}
+	regData, _ := json.MarshalIndent(reg, "", "  ")
+	os.WriteFile(filepath.Join(regDir, "registry.json"), regData, 0644)
+
+	mkMeta := func(name string, peerDeps []string) {
+		dir := filepath.Join(regDir, "ui", name, "v1.0.0")
+		os.MkdirAll(dir, 0755)
+		m := Meta{Name: name, Version: "1.0.0", Category: "ui", PeerDeps: peerDeps, Files: []string{name + ".tsx"}}
+		data, _ := json.Marshal(m)
+		os.WriteFile(filepath.Join(dir, "meta.json"), data, 0644)
+		os.WriteFile(filepath.Join(dir, name+".tsx"), []byte("export default null"), 0644)
+	}
+
+	mkMeta("a", []string{"ui/b"})
+	mkMeta("b", []string{"ui/a"}) // cycle back to A
+
+	mgr := NewManager(cacheDir)
+	result, err := ResolvePeerDepsRecursive(mgr, "ui/a", map[string]bool{}, 5)
+	if err != nil {
+		t.Fatalf("ResolvePeerDepsRecursive: %v", err)
+	}
+
+	// Should only have B (A is the root, already visited)
+	if len(result) != 1 || result[0] != "ui/b" {
+		t.Errorf("expected [ui/b], got %v", result)
+	}
+}
+
+func TestResolvePeerDepsRecursive_NoPeerDeps(t *testing.T) {
+	tmp := t.TempDir()
+	cacheDir := filepath.Join(tmp, "cache")
+	regDir := filepath.Join(cacheDir, "ui")
+	os.MkdirAll(regDir, 0755)
+
+	reg := Registry{
+		"ui/a": AssetInfo{Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/a/v1.0.0"}}},
+	}
+	regData, _ := json.MarshalIndent(reg, "", "  ")
+	os.WriteFile(filepath.Join(regDir, "registry.json"), regData, 0644)
+
+	dir := filepath.Join(regDir, "ui", "a", "v1.0.0")
+	os.MkdirAll(dir, 0755)
+	m := Meta{Name: "a", Version: "1.0.0", Category: "ui", Files: []string{"a.tsx"}}
+	data, _ := json.Marshal(m)
+	os.WriteFile(filepath.Join(dir, "meta.json"), data, 0644)
+
+	mgr := NewManager(cacheDir)
+	result, err := ResolvePeerDepsRecursive(mgr, "ui/a", map[string]bool{}, 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil, got %v", result)
+	}
+}

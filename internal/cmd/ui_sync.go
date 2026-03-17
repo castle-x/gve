@@ -48,7 +48,12 @@ func runUISync(cmd *cobra.Command, args []string) error {
 
 	var targets []string
 	if len(args) > 0 {
-		targets = []string{args[0]}
+		// Resolve shortname (e.g. "spinner" → "ui/spinner")
+		name := args[0]
+		if resolved, ok := reg.ResolveAssetName(name); ok {
+			name = resolved
+		}
+		targets = []string{name}
 	} else {
 		for name := range lf.UI.Assets {
 			targets = append(targets, name)

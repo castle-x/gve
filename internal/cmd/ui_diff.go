@@ -30,6 +30,21 @@ func runUIDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := config.Default()
+	mgr := asset.NewManager(cfg.CacheDir)
+	if err := mgr.EnsureCache(cfg.UIRegistry, "ui"); err != nil {
+		return fmt.Errorf("update cache: %w", err)
+	}
+
+	reg, err := mgr.GetRegistry("ui")
+	if err != nil {
+		return fmt.Errorf("load registry: %w", err)
+	}
+
+	// Resolve shortname (e.g. "spinner" → "ui/spinner")
+	if resolved, ok := reg.ResolveAssetName(assetName); ok {
+		assetName = resolved
+	}
+
 	lockPath := filepath.Join(projectDir, "gve.lock")
 	lf, err := lock.Load(lockPath)
 	if err != nil {
@@ -39,16 +54,6 @@ func runUIDiff(cmd *cobra.Command, args []string) error {
 	version, ok := lf.GetUIAsset(assetName)
 	if !ok {
 		return fmt.Errorf("asset %q not found in gve.lock — is it installed?", assetName)
-	}
-
-	mgr := asset.NewManager(cfg.CacheDir)
-	if err := mgr.EnsureCache(cfg.UIRegistry, "ui"); err != nil {
-		return fmt.Errorf("update cache: %w", err)
-	}
-
-	reg, err := mgr.GetRegistry("ui")
-	if err != nil {
-		return fmt.Errorf("load registry: %w", err)
 	}
 
 	info, ok := reg[assetName]
@@ -74,7 +79,6 @@ func runUIDiff(cmd *cobra.Command, args []string) error {
 	}
 	bareName := meta.Name
 	if bareName == "" {
-		// Extract from asset name
 		if idx := strings.LastIndex(assetName, "/"); idx >= 0 {
 			bareName = assetName[idx+1:]
 		} else {

@@ -8,6 +8,26 @@ import (
 	"sort"
 )
 
+// GetInstallPath returns the project-relative install directory for an asset.
+func GetInstallPath(category, name, dest string) string {
+	if dest != "" {
+		return dest
+	}
+	switch category {
+	case "ui":
+		return fmt.Sprintf("site/src/shared/wk/ui/%s", name)
+	case "component":
+		return fmt.Sprintf("site/src/shared/wk/components/%s", name)
+	case "scaffold":
+		return "site"
+	case "global":
+		return "" // global must have dest
+	default:
+		// Backward compat fallback
+		return fmt.Sprintf("site/src/shared/wk/ui/%s", name)
+	}
+}
+
 // InstallUIAsset installs a UI asset from the cache into the project directory.
 func InstallUIAsset(mgr *Manager, assetName, versionConstraint, projectDir string) (installedVersion string, err error) {
 	reg, err := mgr.GetRegistry("ui")
@@ -45,13 +65,16 @@ func InstallUIAsset(mgr *Manager, assetName, versionConstraint, projectDir strin
 		return "", fmt.Errorf("load meta: %w", err)
 	}
 
-	// Determine destination
-	var destDir string
-	if meta.Dest != "" {
-		destDir = filepath.Join(projectDir, meta.Dest)
-	} else {
-		destDir = filepath.Join(projectDir, "site", "src", "shared", "ui", assetName)
+	// Determine category
+	category := meta.Category
+	if category == "" {
+		category = InferCategory(assetPath)
 	}
+
+	// Determine destination using category-aware path
+	bareName := meta.Name
+	installPath := GetInstallPath(category, bareName, meta.Dest)
+	destDir := filepath.Join(projectDir, installPath)
 
 	// Copy files
 	if err := CopyAsset(srcDir, destDir, meta.Files); err != nil {

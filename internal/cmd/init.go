@@ -14,16 +14,21 @@ import (
 var validProjectName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
 func newInitCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "init <project-name>",
 		Short: "初始化新项目",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runInit,
 	}
+
+	cmd.Flags().String("scaffold", "default", "骨架模板名称 (如 default, dashboard)")
+
+	return cmd
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	projectName := args[0]
+	scaffoldName, _ := cmd.Flags().GetString("scaffold")
 
 	if !validProjectName.MatchString(projectName) {
 		return fmt.Errorf("invalid project name %q: must start with a letter and contain only letters, digits, hyphens, underscores", projectName)
@@ -53,8 +58,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 2: Initialize frontend from scaffold asset
-	fmt.Println("  Initializing frontend from scaffold asset...")
-	if err := initFrontend(projectDir, cfg); err != nil {
+	scaffoldKey := "scaffold/" + scaffoldName
+	fmt.Printf("  Initializing frontend from %s...\n", scaffoldKey)
+	if err := initFrontend(projectDir, cfg, scaffoldKey); err != nil {
 		return fmt.Errorf("init frontend: %w", err)
 	}
 

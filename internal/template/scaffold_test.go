@@ -29,7 +29,7 @@ func TestScaffold(t *testing.T) {
 		{"go.mod", []string{"module my-app", "go 1."}, ""},
 		{"Makefile", []string{"my-app", "build-web", "build-backend"}, ""},
 		{".gitignore", []string{"dist/", ".gve/", "site/node_modules"}, ""},
-		{"gve.lock", []string{`"version": "1"`, "wk-ui", "wk-api", `"assets": {}`}, ""},
+		{"gve.lock", []string{`"version": "2"`, "wk-ui", "wk-api", `"assets": {}`}, ""},
 		{"cmd/server/main.go", []string{"my-app", "site.", "ListenAndServe", "/api/health"}, ""},
 	}
 

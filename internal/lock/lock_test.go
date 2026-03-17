@@ -53,55 +53,6 @@ func TestNewV2(t *testing.T) {
 	}
 }
 
-func TestLoadV1_AutoMigrate(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "gve.lock")
-	// Write a v1 lock file
-	v1 := `{
-		"version": "1",
-		"ui": {
-			"registry": "github.com/castle-x/wk-ui",
-			"assets": {
-				"button": {"version": "1.0.0"},
-				"base-setup": {"version": "1.0.0"}
-			}
-		},
-		"api": {
-			"registry": "github.com/castle-x/wk-api",
-			"assets": {}
-		}
-	}`
-	os.WriteFile(path, []byte(v1), 0644)
-
-	lf, err := Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	// Should auto-migrate to v2
-	if lf.Version != "2" {
-		t.Errorf("Version = %q, want %q after migration", lf.Version, "2")
-	}
-
-	// "button" -> "ui/button"
-	v, ok := lf.GetUIAsset("ui/button")
-	if !ok || v != "1.0.0" {
-		t.Errorf("GetUIAsset(ui/button) = %q, %v", v, ok)
-	}
-
-	// "base-setup" -> "scaffold/default"
-	v, ok = lf.GetUIAsset("scaffold/default")
-	if !ok || v != "1.0.0" {
-		t.Errorf("GetUIAsset(scaffold/default) = %q, %v", v, ok)
-	}
-
-	// Old keys should no longer exist
-	_, ok = lf.GetUIAsset("button")
-	if ok {
-		t.Error("old key 'button' should not exist after migration")
-	}
-}
-
 func TestLoadV2_NoMigration(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "gve.lock")

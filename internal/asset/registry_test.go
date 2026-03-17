@@ -7,18 +7,18 @@ import (
 )
 
 const testRegistryJSON = `{
-  "button": {
+  "ui/button": {
     "latest": "1.2.0",
     "versions": {
-      "1.0.0": { "path": "assets/button/v1.0.0" },
-      "1.1.0": { "path": "assets/button/v1.1.0" },
-      "1.2.0": { "path": "assets/button/v1.2.0" }
+      "1.0.0": { "path": "ui/button/v1.0.0" },
+      "1.1.0": { "path": "ui/button/v1.1.0" },
+      "1.2.0": { "path": "ui/button/v1.2.0" }
     }
   },
-  "base-setup": {
+  "scaffold/default": {
     "latest": "1.0.0",
     "versions": {
-      "1.0.0": { "path": "assets/base-setup/v1.0.0" }
+      "1.0.0": { "path": "scaffold/default/v1.0.0" }
     }
   }
 }`
@@ -48,15 +48,15 @@ func TestGetLatest(t *testing.T) {
 	path := writeTestRegistry(t)
 	reg, _ := LoadRegistry(path)
 
-	ver, p, err := reg.GetLatest("button")
+	ver, p, err := reg.GetLatest("ui/button")
 	if err != nil {
 		t.Fatalf("GetLatest: %v", err)
 	}
 	if ver != "1.2.0" {
 		t.Errorf("version = %q, want %q", ver, "1.2.0")
 	}
-	if p != "assets/button/v1.2.0" {
-		t.Errorf("path = %q, want %q", p, "assets/button/v1.2.0")
+	if p != "ui/button/v1.2.0" {
+		t.Errorf("path = %q, want %q", p, "ui/button/v1.2.0")
 	}
 
 	_, _, err = reg.GetLatest("nonexistent")
@@ -69,28 +69,28 @@ func TestGetVersion(t *testing.T) {
 	path := writeTestRegistry(t)
 	reg, _ := LoadRegistry(path)
 
-	p, err := reg.GetVersion("button", "1.0.0")
+	p, err := reg.GetVersion("ui/button", "1.0.0")
 	if err != nil {
 		t.Fatalf("GetVersion: %v", err)
 	}
-	if p != "assets/button/v1.0.0" {
-		t.Errorf("path = %q, want %q", p, "assets/button/v1.0.0")
+	if p != "ui/button/v1.0.0" {
+		t.Errorf("path = %q, want %q", p, "ui/button/v1.0.0")
 	}
 
-	p, err = reg.GetVersion("button", "^1.0.0")
+	p, err = reg.GetVersion("ui/button", "^1.0.0")
 	if err != nil {
 		t.Fatalf("GetVersion caret: %v", err)
 	}
-	if p != "assets/button/v1.2.0" {
-		t.Errorf("caret path = %q, want %q", p, "assets/button/v1.2.0")
+	if p != "ui/button/v1.2.0" {
+		t.Errorf("caret path = %q, want %q", p, "ui/button/v1.2.0")
 	}
 
-	p, err = reg.GetVersion("button", "latest")
+	p, err = reg.GetVersion("ui/button", "latest")
 	if err != nil {
 		t.Fatalf("GetVersion latest: %v", err)
 	}
-	if p != "assets/button/v1.2.0" {
-		t.Errorf("latest path = %q, want %q", p, "assets/button/v1.2.0")
+	if p != "ui/button/v1.2.0" {
+		t.Errorf("latest path = %q, want %q", p, "ui/button/v1.2.0")
 	}
 }
 

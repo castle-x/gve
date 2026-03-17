@@ -10,7 +10,7 @@ import (
 	"github.com/castle-x/gve/internal/lock"
 )
 
-func initFrontend(projectDir string, cfg *config.Config) error {
+func initFrontend(projectDir string, cfg *config.Config, scaffoldKey string) error {
 	mgr := asset.NewManager(cfg.CacheDir)
 
 	// Clone/pull the UI registry
@@ -24,27 +24,14 @@ func initFrontend(projectDir string, cfg *config.Config) error {
 		return fmt.Errorf("load ui registry: %w", err)
 	}
 
-	// Find scaffolds from registry
-	scaffolds := reg.ListByCategory("scaffold")
-	var scaffoldKey string
-	if len(scaffolds) == 0 {
-		// Fallback to v1 base-setup
-		scaffoldKey = "base-setup"
-	} else if len(scaffolds) == 1 {
-		scaffoldKey = scaffolds[0]
-	} else {
-		// Default to scaffold/default if available
-		scaffoldKey = "scaffold/default"
-		found := false
-		for _, s := range scaffolds {
-			if s == scaffoldKey {
-				found = true
-				break
-			}
+	// Verify the scaffold exists in registry
+	if _, ok := reg[scaffoldKey]; !ok {
+		available := reg.ListByCategory("scaffold")
+		if len(available) == 0 {
+			return fmt.Errorf("scaffold %q not found and no scaffolds available in registry", scaffoldKey)
 		}
-		if !found {
-			scaffoldKey = scaffolds[0]
-		}
+		return fmt.Errorf("scaffold %q not found. Available scaffolds:\n  %s",
+			scaffoldKey, formatScaffoldList(available))
 	}
 
 	// Get latest version
@@ -73,7 +60,7 @@ func initFrontend(projectDir string, cfg *config.Config) error {
 		return fmt.Errorf("copy %s: %w", scaffoldKey, err)
 	}
 
-	// Create v2 placeholder directories
+	// Create placeholder directories
 	placeholders := []string{
 		filepath.Join(destDir, "src", "views"),
 		filepath.Join(destDir, "src", "shared", "wk", "ui"),
@@ -102,4 +89,16 @@ func initFrontend(projectDir string, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// formatScaffoldList formats scaffold keys for display.
+func formatScaffoldList(scaffolds []string) string {
+	result := ""
+	for i, s := range scaffolds {
+		if i > 0 {
+			result += "\n  "
+		}
+		result += s
+	}
+	return result
 }

@@ -13,6 +13,7 @@ import (
 
 // setupFakeAssetCache creates a minimal wk-ui and wk-api cache
 // in a temp directory, avoiding any git operations.
+// Uses v2 directory structure: scaffold/, ui/, components/, global/
 func setupFakeAssetCache(t *testing.T) (cacheDir string) {
 	t.Helper()
 	cacheDir = filepath.Join(t.TempDir(), "cache")
@@ -20,46 +21,46 @@ func setupFakeAssetCache(t *testing.T) (cacheDir string) {
 	// --- wk-ui ---
 	uiDir := filepath.Join(cacheDir, "ui")
 
-	// base-setup v1.0.0
-	baseDir := filepath.Join(uiDir, "assets", "base-setup", "v1.0.0")
+	// scaffold/default v1.0.0
+	baseDir := filepath.Join(uiDir, "scaffold", "default", "v1.0.0")
 	os.MkdirAll(baseDir, 0755)
-	writeMeta(t, baseDir, asset.Meta{
-		Name: "base-setup", Version: "1.0.0", Dest: "site",
+	writeTestMeta(t, baseDir, asset.Meta{
+		Name: "default", Version: "1.0.0", Category: "scaffold", Dest: "site",
 		Files: []string{"package.json", "embed.go"},
 	})
 	os.WriteFile(filepath.Join(baseDir, "package.json"), []byte(`{"name":"app","dependencies":{}}`), 0644)
 	os.WriteFile(filepath.Join(baseDir, "embed.go"), []byte("package site\n"), 0644)
 
-	// button v1.0.0
-	btnDir := filepath.Join(uiDir, "assets", "button", "v1.0.0")
+	// ui/button v1.0.0
+	btnDir := filepath.Join(uiDir, "ui", "button", "v1.0.0")
 	os.MkdirAll(btnDir, 0755)
-	writeMeta(t, btnDir, asset.Meta{
-		Name: "button", Version: "1.0.0",
+	writeTestMeta(t, btnDir, asset.Meta{
+		Name: "button", Version: "1.0.0", Category: "ui",
 		Deps:  []string{"@radix-ui/react-slot"},
 		Files: []string{"button.tsx"},
 	})
 	os.WriteFile(filepath.Join(btnDir, "button.tsx"), []byte("export const Button = () => <button/>;\n"), 0644)
 
-	// button v1.1.0 (for upgrade tests)
-	btn11Dir := filepath.Join(uiDir, "assets", "button", "v1.1.0")
+	// ui/button v1.1.0 (for upgrade tests)
+	btn11Dir := filepath.Join(uiDir, "ui", "button", "v1.1.0")
 	os.MkdirAll(btn11Dir, 0755)
-	writeMeta(t, btn11Dir, asset.Meta{
-		Name: "button", Version: "1.1.0",
+	writeTestMeta(t, btn11Dir, asset.Meta{
+		Name: "button", Version: "1.1.0", Category: "ui",
 		Deps:  []string{"@radix-ui/react-slot"},
 		Files: []string{"button.tsx"},
 	})
 	os.WriteFile(filepath.Join(btn11Dir, "button.tsx"), []byte("export const Button = ({variant}) => <button data-variant={variant}/>;\n"), 0644)
 
 	uiReg := asset.Registry{
-		"base-setup": {Latest: "1.0.0", Versions: map[string]asset.VersionEntry{
-			"1.0.0": {Path: "assets/base-setup/v1.0.0"},
+		"scaffold/default": {Latest: "1.0.0", Versions: map[string]asset.VersionEntry{
+			"1.0.0": {Path: "scaffold/default/v1.0.0"},
 		}},
-		"button": {Latest: "1.1.0", Versions: map[string]asset.VersionEntry{
-			"1.0.0": {Path: "assets/button/v1.0.0"},
-			"1.1.0": {Path: "assets/button/v1.1.0"},
+		"ui/button": {Latest: "1.1.0", Versions: map[string]asset.VersionEntry{
+			"1.0.0": {Path: "ui/button/v1.0.0"},
+			"1.1.0": {Path: "ui/button/v1.1.0"},
 		}},
 	}
-	writeJSON(t, filepath.Join(uiDir, "registry.json"), uiReg)
+	writeTestJSON(t, filepath.Join(uiDir, "registry.json"), uiReg)
 	// .git marker so EnsureCache skips cloning
 	os.MkdirAll(filepath.Join(uiDir, ".git"), 0755)
 
@@ -77,18 +78,18 @@ func setupFakeAssetCache(t *testing.T) (cacheDir string) {
 			"v1": {Path: "example-project/user/v1"},
 		}},
 	}
-	writeJSON(t, filepath.Join(apiDir, "registry.json"), apiReg)
+	writeTestJSON(t, filepath.Join(apiDir, "registry.json"), apiReg)
 	os.MkdirAll(filepath.Join(apiDir, ".git"), 0755)
 
 	return cacheDir
 }
 
-func writeMeta(t *testing.T, dir string, m asset.Meta) {
+func writeTestMeta(t *testing.T, dir string, m asset.Meta) {
 	t.Helper()
-	writeJSON(t, filepath.Join(dir, "meta.json"), m)
+	writeTestJSON(t, filepath.Join(dir, "meta.json"), m)
 }
 
-func writeJSON(t *testing.T, path string, v interface{}) {
+func writeTestJSON(t *testing.T, path string, v interface{}) {
 	t.Helper()
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -100,7 +101,7 @@ func writeJSON(t *testing.T, path string, v interface{}) {
 }
 
 // setupProject creates a minimal GVE project with gve.lock and site/.
-func setupProject(t *testing.T, cacheDir string) string {
+func setupProject(t *testing.T, _ string) string {
 	t.Helper()
 	projectDir := t.TempDir()
 
@@ -112,7 +113,8 @@ func setupProject(t *testing.T, cacheDir string) string {
 	siteDir := filepath.Join(projectDir, "site")
 	os.MkdirAll(siteDir, 0755)
 	os.WriteFile(filepath.Join(siteDir, "package.json"), []byte(`{"name":"app","dependencies":{}}`), 0644)
-	os.MkdirAll(filepath.Join(siteDir, "src", "shared", "ui"), 0755)
+	os.MkdirAll(filepath.Join(siteDir, "src", "shared", "wk", "ui"), 0755)
+	os.MkdirAll(filepath.Join(siteDir, "src", "shared", "wk", "components"), 0755)
 
 	return projectDir
 }
@@ -140,7 +142,7 @@ func TestUserJourney(t *testing.T) {
 	mgr := asset.NewManager(cacheDir)
 
 	t.Run("Step1_UIAdd_Button", func(t *testing.T) {
-		ver, err := asset.InstallUIAsset(mgr, "button", "1.0.0", projectDir)
+		ver, err := asset.InstallUIAsset(mgr, "ui/button", "1.0.0", projectDir)
 		if err != nil {
 			t.Fatalf("InstallUIAsset: %v", err)
 		}
@@ -148,13 +150,13 @@ func TestUserJourney(t *testing.T) {
 			t.Errorf("version = %q, want 1.0.0", ver)
 		}
 
-		btnFile := filepath.Join(projectDir, "site", "src", "shared", "ui", "button", "button.tsx")
+		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
 		if _, err := os.Stat(btnFile); err != nil {
 			t.Errorf("button.tsx not installed: %v", err)
 		}
 
 		lf, _ := lock.Load(filepath.Join(projectDir, "gve.lock"))
-		lf.SetUIAsset("button", ver)
+		lf.SetUIAsset("ui/button", ver)
 		lf.Save(filepath.Join(projectDir, "gve.lock"))
 	})
 
@@ -163,9 +165,9 @@ func TestUserJourney(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		v, ok := lf.GetUIAsset("button")
+		v, ok := lf.GetUIAsset("ui/button")
 		if !ok {
-			t.Fatal("button not in gve.lock")
+			t.Fatal("ui/button not in gve.lock")
 		}
 		if v != "1.0.0" {
 			t.Errorf("button version = %q, want 1.0.0", v)
@@ -205,9 +207,9 @@ func TestUserJourney(t *testing.T) {
 		uiReg, _ := mgr.GetRegistry("ui")
 		apiReg, _ := mgr.GetRegistry("api")
 
-		// button: 1.0.0 installed, 1.1.0 available
-		btnInfo := uiReg["button"]
-		btnLock := lf.UI.Assets["button"]
+		// ui/button: 1.0.0 installed, 1.1.0 available
+		btnInfo := uiReg["ui/button"]
+		btnLock := lf.UI.Assets["ui/button"]
 		if btnLock.Version == btnInfo.Latest {
 			t.Error("button should have an update available")
 		}
@@ -222,11 +224,11 @@ func TestUserJourney(t *testing.T) {
 
 	t.Run("Step5_UIDiff_NoChanges", func(t *testing.T) {
 		reg, _ := mgr.GetRegistry("ui")
-		ve := reg["button"].Versions["1.0.0"]
+		ve := reg["ui/button"].Versions["1.0.0"]
 		cacheAssetDir := mgr.GetAssetDir("ui", ve.Path)
 		meta, _ := asset.LoadMeta(filepath.Join(cacheAssetDir, "meta.json"))
 
-		localDir := filepath.Join(projectDir, "site", "src", "shared", "ui", "button")
+		localDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button")
 		diffs, err := asset.DiffAsset(localDir, cacheAssetDir, meta.Files)
 		if err != nil {
 			t.Fatal(err)
@@ -239,15 +241,15 @@ func TestUserJourney(t *testing.T) {
 	})
 
 	t.Run("Step6_UIDiff_WithLocalEdit", func(t *testing.T) {
-		btnFile := filepath.Join(projectDir, "site", "src", "shared", "ui", "button", "button.tsx")
+		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
 		os.WriteFile(btnFile, []byte("// customized\nexport const Button = () => <button className='custom'/>;\n"), 0644)
 
 		reg, _ := mgr.GetRegistry("ui")
-		ve := reg["button"].Versions["1.0.0"]
+		ve := reg["ui/button"].Versions["1.0.0"]
 		cacheAssetDir := mgr.GetAssetDir("ui", ve.Path)
 		meta, _ := asset.LoadMeta(filepath.Join(cacheAssetDir, "meta.json"))
 
-		localDir := filepath.Join(projectDir, "site", "src", "shared", "ui", "button")
+		localDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button")
 		diffs, _ := asset.DiffAsset(localDir, cacheAssetDir, meta.Files)
 
 		found := false
@@ -269,13 +271,13 @@ func TestUserJourney(t *testing.T) {
 	})
 
 	t.Run("Step7_Sync_RestoresMissing", func(t *testing.T) {
-		btnDir := filepath.Join(projectDir, "site", "src", "shared", "ui", "button")
+		btnDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button")
 		os.RemoveAll(btnDir)
 
 		// Reinstall button from lock
 		lf, _ := lock.Load(filepath.Join(projectDir, "gve.lock"))
-		v := lf.UI.Assets["button"].Version
-		_, err := asset.InstallUIAsset(mgr, "button", v, projectDir)
+		v := lf.UI.Assets["ui/button"].Version
+		_, err := asset.InstallUIAsset(mgr, "ui/button", v, projectDir)
 		if err != nil {
 			t.Fatalf("reinstall button: %v", err)
 		}
@@ -307,7 +309,7 @@ func TestUserJourney(t *testing.T) {
 	})
 
 	t.Run("Step9_UIUpgrade_ToLatest", func(t *testing.T) {
-		ver, err := asset.InstallUIAsset(mgr, "button", "1.1.0", projectDir)
+		ver, err := asset.InstallUIAsset(mgr, "ui/button", "1.1.0", projectDir)
 		if err != nil {
 			t.Fatalf("upgrade button: %v", err)
 		}
@@ -315,17 +317,17 @@ func TestUserJourney(t *testing.T) {
 			t.Errorf("version = %q, want 1.1.0", ver)
 		}
 
-		btnFile := filepath.Join(projectDir, "site", "src", "shared", "ui", "button", "button.tsx")
+		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
 		data, _ := os.ReadFile(btnFile)
 		if !strings.Contains(string(data), "variant") {
 			t.Error("button.tsx should contain v1.1.0 content with 'variant'")
 		}
 
 		lf, _ := lock.Load(filepath.Join(projectDir, "gve.lock"))
-		lf.SetUIAsset("button", ver)
+		lf.SetUIAsset("ui/button", ver)
 		lf.Save(filepath.Join(projectDir, "gve.lock"))
 
-		v, _ := lf.GetUIAsset("button")
+		v, _ := lf.GetUIAsset("ui/button")
 		if v != "1.1.0" {
 			t.Errorf("lock version = %q, want 1.1.0", v)
 		}
@@ -429,23 +431,19 @@ func TestParseNodeMajor(t *testing.T) {
 
 func TestRegistryBuild_MultiVersion(t *testing.T) {
 	dir := t.TempDir()
-	assetsDir := filepath.Join(dir, "assets")
 
+	// Create v2 structure: ui/widget/v{x}/
 	for _, v := range []string{"v1.0.0", "v2.0.0", "v1.5.0"} {
-		d := filepath.Join(assetsDir, "widget", v)
+		d := filepath.Join(dir, "ui", "widget", v)
 		os.MkdirAll(d, 0755)
 		ver := strings.TrimPrefix(v, "v")
-		writeMeta(t, d, asset.Meta{
-			Name: "widget", Version: ver, Files: []string{"widget.tsx"},
+		writeTestMeta(t, d, asset.Meta{
+			Name: "widget", Version: ver, Category: "ui", Files: []string{"widget.tsx"},
 		})
 		os.WriteFile(filepath.Join(d, "widget.tsx"), []byte("export const Widget = () => null;\n"), 0644)
 	}
 
-	orig, _ := os.Getwd()
-	defer os.Chdir(orig)
-	os.Chdir(dir)
-
-	if err := runRegistryBuild("assets"); err != nil {
+	if err := runRegistryBuild(dir); err != nil {
 		t.Fatalf("runRegistryBuild: %v", err)
 	}
 
@@ -454,9 +452,9 @@ func TestRegistryBuild_MultiVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	info, ok := reg["widget"]
+	info, ok := reg["ui/widget"]
 	if !ok {
-		t.Fatal("widget not in registry")
+		t.Fatal("ui/widget not in registry")
 	}
 	if info.Latest != "2.0.0" {
 		t.Errorf("latest = %q, want 2.0.0", info.Latest)
@@ -474,10 +472,10 @@ func TestInstallGlobalAsset(t *testing.T) {
 
 	mgr := asset.NewManager(cacheDir)
 
-	// base-setup has dest: "site", should install to site/
-	ver, err := asset.InstallUIAsset(mgr, "base-setup", "1.0.0", projectDir)
+	// scaffold/default has dest: "site", should install to site/
+	ver, err := asset.InstallUIAsset(mgr, "scaffold/default", "1.0.0", projectDir)
 	if err != nil {
-		t.Fatalf("install base-setup: %v", err)
+		t.Fatalf("install scaffold/default: %v", err)
 	}
 	if ver != "1.0.0" {
 		t.Errorf("version = %q, want 1.0.0", ver)
@@ -502,7 +500,7 @@ func TestUIAdd_InjectsDeps(t *testing.T) {
 
 	mgr := asset.NewManager(cacheDir)
 
-	_, err := asset.InstallUIAsset(mgr, "button", "1.0.0", projectDir)
+	_, err := asset.InstallUIAsset(mgr, "ui/button", "1.0.0", projectDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,13 +519,13 @@ func TestUIAdd_InjectsDeps(t *testing.T) {
 
 func TestPrintAssetStatus(t *testing.T) {
 	assets := map[string]lock.AssetEntry{
-		"button":     {Version: "1.0.0"},
-		"data-table": {Version: "2.0.0"},
-		"missing":    {Version: "1.0.0"},
+		"ui/button":             {Version: "1.0.0"},
+		"components/data-table": {Version: "2.0.0"},
+		"missing":               {Version: "1.0.0"},
 	}
 	reg := asset.Registry{
-		"button":     {Latest: "1.1.0", Versions: map[string]asset.VersionEntry{"1.0.0": {Path: "x"}}},
-		"data-table": {Latest: "2.0.0", Versions: map[string]asset.VersionEntry{"2.0.0": {Path: "y"}}},
+		"ui/button":             {Latest: "1.1.0", Versions: map[string]asset.VersionEntry{"1.0.0": {Path: "x"}}},
+		"components/data-table": {Latest: "2.0.0", Versions: map[string]asset.VersionEntry{"2.0.0": {Path: "y"}}},
 	}
 
 	// printAssetStatus just prints — verify it doesn't panic
@@ -554,12 +552,12 @@ func TestAssetExists_VersionNotInRegistry(t *testing.T) {
 	mgr := asset.NewManager(cacheDir)
 
 	reg := asset.Registry{
-		"button": {Latest: "1.0.0", Versions: map[string]asset.VersionEntry{
-			"1.0.0": {Path: "assets/button/v1.0.0"},
+		"ui/button": {Latest: "1.0.0", Versions: map[string]asset.VersionEntry{
+			"1.0.0": {Path: "ui/button/v1.0.0"},
 		}},
 	}
 
-	if assetExists("button", "9.9.9", reg, mgr, projectDir) {
+	if assetExists("ui/button", "9.9.9", reg, mgr, projectDir) {
 		t.Error("assetExists should return false for version not in registry")
 	}
 }
@@ -571,9 +569,9 @@ func TestAssetExists_FilePresent(t *testing.T) {
 	reg, _ := mgr.GetRegistry("ui")
 
 	// Install button first
-	asset.InstallUIAsset(mgr, "button", "1.0.0", projectDir)
+	asset.InstallUIAsset(mgr, "ui/button", "1.0.0", projectDir)
 
-	if !assetExists("button", "1.0.0", reg, mgr, projectDir) {
+	if !assetExists("ui/button", "1.0.0", reg, mgr, projectDir) {
 		t.Error("assetExists should return true when files are present")
 	}
 }
@@ -585,7 +583,7 @@ func TestAssetExists_FileMissing(t *testing.T) {
 	reg, _ := mgr.GetRegistry("ui")
 
 	// button not installed — files missing
-	if assetExists("button", "1.0.0", reg, mgr, projectDir) {
+	if assetExists("ui/button", "1.0.0", reg, mgr, projectDir) {
 		t.Error("assetExists should return false when files are missing")
 	}
 }
@@ -597,31 +595,31 @@ func TestResolveDestPath(t *testing.T) {
 	mgr := asset.NewManager(cacheDir)
 	reg, _ := mgr.GetRegistry("ui")
 
-	t.Run("global asset with dest", func(t *testing.T) {
-		got := resolveDestPath("base-setup", "1.0.0", reg, mgr)
+	t.Run("scaffold asset with dest", func(t *testing.T) {
+		got := resolveDestPath("scaffold/default", "1.0.0", reg, mgr)
 		if got != "site/" {
-			t.Errorf("resolveDestPath(base-setup) = %q, want \"site/\"", got)
+			t.Errorf("resolveDestPath(scaffold/default) = %q, want \"site/\"", got)
 		}
 	})
 
-	t.Run("component asset without dest", func(t *testing.T) {
-		got := resolveDestPath("button", "1.0.0", reg, mgr)
-		if got != "site/src/shared/ui/button/" {
-			t.Errorf("resolveDestPath(button) = %q, want \"site/src/shared/ui/button/\"", got)
+	t.Run("ui asset without dest", func(t *testing.T) {
+		got := resolveDestPath("ui/button", "1.0.0", reg, mgr)
+		if got != "site/src/shared/wk/ui/button/" {
+			t.Errorf("resolveDestPath(ui/button) = %q, want \"site/src/shared/wk/ui/button/\"", got)
 		}
 	})
 
 	t.Run("unknown asset", func(t *testing.T) {
 		got := resolveDestPath("nonexistent", "1.0.0", reg, mgr)
-		if got != "" {
-			t.Errorf("resolveDestPath(nonexistent) = %q, want empty", got)
+		if got != "site/src/shared/wk/ui/nonexistent/" {
+			t.Errorf("resolveDestPath(nonexistent) = %q, want fallback path", got)
 		}
 	})
 
 	t.Run("nil registry", func(t *testing.T) {
-		got := resolveDestPath("button", "1.0.0", nil, mgr)
-		if got != "" {
-			t.Errorf("resolveDestPath with nil reg = %q, want empty", got)
+		got := resolveDestPath("ui/button", "1.0.0", nil, mgr)
+		if got != "site/src/shared/wk/ui/button/" {
+			t.Errorf("resolveDestPath with nil reg = %q, want fallback path", got)
 		}
 	})
 }
@@ -677,11 +675,11 @@ func TestUIInstall_Idempotent(t *testing.T) {
 	mgr := asset.NewManager(cacheDir)
 
 	// Install twice
-	v1, err := asset.InstallUIAsset(mgr, "button", "1.0.0", projectDir)
+	v1, err := asset.InstallUIAsset(mgr, "ui/button", "1.0.0", projectDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	v2, err := asset.InstallUIAsset(mgr, "button", "1.0.0", projectDir)
+	v2, err := asset.InstallUIAsset(mgr, "ui/button", "1.0.0", projectDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -690,7 +688,7 @@ func TestUIInstall_Idempotent(t *testing.T) {
 		t.Errorf("idempotent install: v1=%q, v2=%q", v1, v2)
 	}
 
-	btnFile := filepath.Join(projectDir, "site", "src", "shared", "ui", "button", "button.tsx")
+	btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
 	data, _ := os.ReadFile(btnFile)
 	if len(data) == 0 {
 		t.Error("button.tsx should have content after double install")
@@ -704,7 +702,7 @@ func TestUIInstall_LatestWhenEmpty(t *testing.T) {
 	projectDir := setupProject(t, cacheDir)
 	mgr := asset.NewManager(cacheDir)
 
-	ver, err := asset.InstallUIAsset(mgr, "button", "", projectDir)
+	ver, err := asset.InstallUIAsset(mgr, "ui/button", "", projectDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -759,17 +757,17 @@ func TestDiffAsset_DeletedFile(t *testing.T) {
 	mgr := asset.NewManager(cacheDir)
 
 	// Install button, then delete a file
-	asset.InstallUIAsset(mgr, "button", "1.0.0", projectDir)
+	asset.InstallUIAsset(mgr, "ui/button", "1.0.0", projectDir)
 
-	btnFile := filepath.Join(projectDir, "site", "src", "shared", "ui", "button", "button.tsx")
+	btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
 	os.Remove(btnFile)
 
 	reg, _ := mgr.GetRegistry("ui")
-	ve := reg["button"].Versions["1.0.0"]
+	ve := reg["ui/button"].Versions["1.0.0"]
 	cacheAssetDir := mgr.GetAssetDir("ui", ve.Path)
 	meta, _ := asset.LoadMeta(filepath.Join(cacheAssetDir, "meta.json"))
 
-	localDir := filepath.Join(projectDir, "site", "src", "shared", "ui", "button")
+	localDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button")
 	diffs, err := asset.DiffAsset(localDir, cacheAssetDir, meta.Files)
 	if err != nil {
 		t.Fatal(err)

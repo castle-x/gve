@@ -50,9 +50,9 @@ func InferCategory(assetPath string) string {
 		return "ui"
 	case "components":
 		return "component"
-	case "global":
-		return "global"
-	default:
+	case "hooks":
+		return "hook"
+default:
 		return ""
 	}
 }

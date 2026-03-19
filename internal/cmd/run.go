@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/logrotate"
 	"github.com/castle-x/gve/internal/runner"
 	"github.com/spf13/cobra"
@@ -30,13 +31,13 @@ const (
 func newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "构建并后台运行服务",
-		Long:  "智能 build 后以后台进程启动服务。\n使用 --fg 前台运行，Ctrl+C 退出。",
+		Short: i18n.T("run_short"),
+		Long:  i18n.T("run_long"),
 		RunE:  runRun,
 	}
-	cmd.Flags().BoolP("foreground", "f", false, "前台运行（阻塞终端）")
-	cmd.Flags().IntP("port", "p", 8080, "服务端口")
-	cmd.Flags().Bool("skip-build", false, "跳过构建，直接启动已有二进制")
+	cmd.Flags().BoolP("foreground", "f", false, i18n.T("run_flag_fg"))
+	cmd.Flags().IntP("port", "p", 8080, i18n.T("run_flag_port"))
+	cmd.Flags().Bool("skip-build", false, i18n.T("run_flag_skip_build"))
 
 	cmd.AddCommand(newRunStopCmd())
 	cmd.AddCommand(newRunRestartCmd())
@@ -74,7 +75,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 	// Check if already running
 	if pid, running := readPIDFile(pidPath); running {
-		return fmt.Errorf("server already running (pid: %d) — use 'gve run stop' first", pid)
+		return fmt.Errorf("%s", i18n.Tf("run_already_running", pid))
 	}
 
 	// Port conflict check
@@ -89,17 +90,17 @@ func runRun(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("check rebuild: %w", err)
 		}
 		if needsBuild {
-			fmt.Println("Building...")
+			fmt.Println(i18n.T("run_building"))
 			if err := doBuild(projectDir); err != nil {
 				return err
 			}
 		} else {
-			fmt.Println("Binary is up-to-date, skipping build.")
+			fmt.Println(i18n.T("run_up_to_date"))
 		}
 	}
 
 	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
-		return fmt.Errorf("binary not found at %s — run 'gve build' first", binaryPath)
+		return fmt.Errorf("%s", i18n.Tf("run_binary_not_found", binaryPath))
 	}
 
 	// Log maintenance (compress old, delete expired)
@@ -123,8 +124,9 @@ func runForeground(binaryPath string, port int, logPath, pidPath string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Printf("Running in foreground on :%d (Ctrl+C to stop)\n", port)
-	fmt.Printf("Log: %s\n\n", logrotate.SymlinkPath(logPath, logPrefix))
+	fmt.Println(i18n.Tf("run_fg_start", port))
+	fmt.Println(i18n.Tf("run_fg_log", logrotate.SymlinkPath(logPath, logPrefix)))
+	fmt.Println()
 
 	err = runner.RunCommand(ctx, runner.CommandOpts{
 		Name: binaryPath,
@@ -134,7 +136,7 @@ func runForeground(binaryPath string, port int, logPath, pidPath string) error {
 	os.Remove(pidPath)
 
 	if ctx.Err() != nil {
-		fmt.Println("\nServer stopped.")
+		fmt.Println(i18n.T("run_fg_stopped"))
 		return nil
 	}
 	return err
@@ -175,8 +177,8 @@ func runBackground(binaryPath string, port int, logPath, pidPath string) error {
 		return fmt.Errorf("write pid file: %w", err)
 	}
 
-	fmt.Printf("Server running on :%d (pid: %d)\n", port, pid)
-	fmt.Printf("Log: %s\n", symlinkPath)
+	fmt.Println(i18n.Tf("run_bg_start", port, pid))
+	fmt.Println(i18n.Tf("run_bg_log", symlinkPath))
 	return nil
 }
 
@@ -185,7 +187,7 @@ func runBackground(binaryPath string, port int, logPath, pidPath string) error {
 func newRunStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
-		Short: "停止后台服务",
+		Short: i18n.T("run_stop_short"),
 		RunE:  runStop,
 	}
 }
@@ -202,7 +204,7 @@ func stopServer(projectDir string) error {
 	pidPath := filepath.Join(projectDir, gveDir, pidFileName)
 	pid, running := readPIDFile(pidPath)
 	if !running {
-		fmt.Println("No running server found.")
+		fmt.Println(i18n.T("run_no_server"))
 		return nil
 	}
 
@@ -212,7 +214,7 @@ func stopServer(projectDir string) error {
 		return fmt.Errorf("find process %d: %w", pid, err)
 	}
 
-	fmt.Printf("Stopping server (pid: %d)...\n", pid)
+	fmt.Println(i18n.Tf("run_stopping", pid))
 	proc.Signal(syscall.SIGTERM)
 
 	done := make(chan struct{})
@@ -230,12 +232,12 @@ func stopServer(projectDir string) error {
 	<-done
 
 	if err := proc.Signal(syscall.Signal(0)); err == nil {
-		fmt.Println("Process did not exit, sending SIGKILL...")
+		fmt.Println(i18n.T("run_sigkill"))
 		proc.Signal(syscall.SIGKILL)
 	}
 
 	os.Remove(pidPath)
-	fmt.Println("Server stopped.")
+	fmt.Println(i18n.T("run_stopped"))
 	return nil
 }
 
@@ -244,7 +246,7 @@ func stopServer(projectDir string) error {
 func newRunRestartCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "restart",
-		Short: "重启后台服务",
+		Short: i18n.T("run_restart_short"),
 		RunE:  runRestart,
 	}
 }
@@ -265,7 +267,7 @@ func runRestart(cmd *cobra.Command, args []string) error {
 func newRunStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "查看服务运行状态",
+		Short: i18n.T("run_status_short"),
 		RunE:  runStatus,
 	}
 }
@@ -280,16 +282,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	pid, running := readPIDFile(pidPath)
 
 	if !running {
-		fmt.Println("Status: stopped")
+		fmt.Println(i18n.T("run_status_stopped"))
 		return nil
 	}
 
 	logPath := filepath.Join(projectDir, gveDir, logsDir)
 	symlink := logrotate.SymlinkPath(logPath, logPrefix)
 
-	fmt.Printf("Status:  running\n")
-	fmt.Printf("PID:     %d\n", pid)
-	fmt.Printf("Log:     %s\n", symlink)
+	fmt.Println(i18n.T("run_status_running"))
+	fmt.Println(i18n.Tf("run_status_pid", pid))
+	fmt.Println(i18n.Tf("run_status_log", symlink))
 	return nil
 }
 
@@ -298,11 +300,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 func newRunLogsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logs",
-		Short: "查看服务日志",
+		Short: i18n.T("run_logs_short"),
 		RunE:  runLogs,
 	}
-	cmd.Flags().IntP("lines", "n", 50, "显示最近 N 行")
-	cmd.Flags().BoolP("follow", "f", false, "持续跟踪日志输出")
+	cmd.Flags().IntP("lines", "n", 50, i18n.T("run_logs_flag_lines"))
+	cmd.Flags().BoolP("follow", "f", false, i18n.T("run_logs_flag_follow"))
 	return cmd
 }
 
@@ -318,7 +320,7 @@ func runLogs(cmd *cobra.Command, args []string) error {
 
 	currentLog := logrotate.CurrentLogPath(logPath, logPrefix)
 	if _, err := os.Stat(currentLog); os.IsNotExist(err) {
-		return fmt.Errorf("no log file found — server may not have been started yet")
+		return fmt.Errorf("%s", i18n.T("run_logs_not_found"))
 	}
 
 	if follow {
@@ -404,7 +406,7 @@ func readPIDFile(path string) (int, bool) {
 func checkPort(port int) error {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		return fmt.Errorf("port %d is already in use — stop the existing process or use --port to specify another", port)
+		return fmt.Errorf("%s", i18n.Tf("run_port_in_use", port))
 	}
 	ln.Close()
 	return nil
@@ -416,7 +418,7 @@ func doBuild(projectDir string) error {
 	ctx := context.Background()
 
 	// Frontend
-	fmt.Println("  Building frontend...")
+	fmt.Println(i18n.T("run_build_frontend"))
 	if err := runner.RunCommand(ctx, runner.CommandOpts{
 		Name: "pnpm",
 		Args: []string{"install", "--frozen-lockfile"},
@@ -440,7 +442,7 @@ func doBuild(projectDir string) error {
 	}
 
 	// Backend
-	fmt.Println("  Building backend...")
+	fmt.Println(i18n.T("run_build_backend"))
 	projectName, _ := extractProjectName(projectDir)
 	outputAbs := filepath.Join(projectDir, "dist", projectName)
 	os.MkdirAll(filepath.Dir(outputAbs), 0755)
@@ -453,6 +455,6 @@ func doBuild(projectDir string) error {
 		return fmt.Errorf("go build failed: %w", err)
 	}
 
-	fmt.Println("  ✓ Build complete")
+	fmt.Println(i18n.T("run_build_ok"))
 	return nil
 }

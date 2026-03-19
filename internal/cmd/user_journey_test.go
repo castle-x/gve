@@ -150,7 +150,7 @@ func TestUserJourney(t *testing.T) {
 			t.Errorf("version = %q, want 1.0.0", ver)
 		}
 
-		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
+		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
 		if _, err := os.Stat(btnFile); err != nil {
 			t.Errorf("button.tsx not installed: %v", err)
 		}
@@ -228,7 +228,7 @@ func TestUserJourney(t *testing.T) {
 		cacheAssetDir := mgr.GetAssetDir("ui", ve.Path)
 		meta, _ := asset.LoadMeta(filepath.Join(cacheAssetDir, "meta.json"))
 
-		localDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button")
+		localDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui")
 		diffs, err := asset.DiffAsset(localDir, cacheAssetDir, meta.Files)
 		if err != nil {
 			t.Fatal(err)
@@ -241,7 +241,7 @@ func TestUserJourney(t *testing.T) {
 	})
 
 	t.Run("Step6_UIDiff_WithLocalEdit", func(t *testing.T) {
-		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
+		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
 		os.WriteFile(btnFile, []byte("// customized\nexport const Button = () => <button className='custom'/>;\n"), 0644)
 
 		reg, _ := mgr.GetRegistry("ui")
@@ -249,7 +249,7 @@ func TestUserJourney(t *testing.T) {
 		cacheAssetDir := mgr.GetAssetDir("ui", ve.Path)
 		meta, _ := asset.LoadMeta(filepath.Join(cacheAssetDir, "meta.json"))
 
-		localDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button")
+		localDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui")
 		diffs, _ := asset.DiffAsset(localDir, cacheAssetDir, meta.Files)
 
 		found := false
@@ -271,8 +271,8 @@ func TestUserJourney(t *testing.T) {
 	})
 
 	t.Run("Step7_Sync_RestoresMissing", func(t *testing.T) {
-		btnDir := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button")
-		os.RemoveAll(btnDir)
+		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
+		os.Remove(btnFile)
 
 		// Reinstall button from lock
 		lf, _ := lock.Load(filepath.Join(projectDir, "gve.lock"))
@@ -282,7 +282,6 @@ func TestUserJourney(t *testing.T) {
 			t.Fatalf("reinstall button: %v", err)
 		}
 
-		btnFile := filepath.Join(btnDir, "button.tsx")
 		if _, err := os.Stat(btnFile); err != nil {
 			t.Errorf("button.tsx not restored: %v", err)
 		}
@@ -317,7 +316,7 @@ func TestUserJourney(t *testing.T) {
 			t.Errorf("version = %q, want 1.1.0", ver)
 		}
 
-		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
+		btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
 		data, _ := os.ReadFile(btnFile)
 		if !strings.Contains(string(data), "variant") {
 			t.Error("button.tsx should contain v1.1.0 content with 'variant'")
@@ -330,6 +329,51 @@ func TestUserJourney(t *testing.T) {
 		v, _ := lf.GetUIAsset("ui/button")
 		if v != "1.1.0" {
 			t.Errorf("lock version = %q, want 1.1.0", v)
+		}
+	})
+
+	t.Run("Step10_APIPush_DryRun", func(t *testing.T) {
+		// Create a local thrift file to push
+		localThriftDir := filepath.Join(projectDir, "api", "test-project", "widget", "v1")
+		os.MkdirAll(localThriftDir, 0755)
+		os.WriteFile(filepath.Join(localThriftDir, "widget.thrift"), []byte("service Widget { string getWidget() }"), 0644)
+
+		apiCacheDir := filepath.Join(cacheDir, "api")
+
+		opts := asset.APIPushOptions{
+			CacheDir:  apiCacheDir,
+			Project:   "test-project",
+			Resource:  "widget",
+			Version:   "v1",
+			SourceDir: localThriftDir,
+			DryRun:    true,
+		}
+
+		if err := asset.PushAPIToRegistry(opts); err != nil {
+			t.Fatalf("APIPush dry-run: %v", err)
+		}
+
+		// Verify nothing was written to cache
+		destDir := filepath.Join(apiCacheDir, "test-project", "widget", "v1")
+		if _, err := os.Stat(destDir); err == nil {
+			t.Error("dry-run should not create destination directory in cache")
+		}
+	})
+
+	t.Run("Step11_APIBuildRegistry", func(t *testing.T) {
+		apiCacheDir := filepath.Join(cacheDir, "api")
+
+		reg, err := asset.BuildAPIRegistry(apiCacheDir)
+		if err != nil {
+			t.Fatalf("BuildAPIRegistry: %v", err)
+		}
+
+		info, ok := reg["example-project/user"]
+		if !ok {
+			t.Fatal("example-project/user not in built registry")
+		}
+		if info.Latest != "v1" {
+			t.Errorf("latest = %q, want v1", info.Latest)
 		}
 	})
 }
@@ -443,8 +487,12 @@ func TestRegistryBuild_MultiVersion(t *testing.T) {
 		os.WriteFile(filepath.Join(d, "widget.tsx"), []byte("export const Widget = () => null;\n"), 0644)
 	}
 
-	if err := runRegistryBuild(dir); err != nil {
-		t.Fatalf("runRegistryBuild: %v", err)
+	reg2, _, err := asset.BuildRegistryV2(dir)
+	if err != nil {
+		t.Fatalf("BuildRegistryV2: %v", err)
+	}
+	if err := asset.WriteRegistryV2(reg2, filepath.Join(dir, "registry.json")); err != nil {
+		t.Fatalf("WriteRegistryV2: %v", err)
 	}
 
 	reg, err := asset.LoadRegistry(filepath.Join(dir, "registry.json"))
@@ -604,21 +652,21 @@ func TestResolveAssetInfo(t *testing.T) {
 
 	t.Run("ui asset without dest", func(t *testing.T) {
 		got, _ := resolveAssetInfo("ui/button", "1.0.0", reg, mgr)
-		if got != "site/src/shared/wk/ui/button/" {
-			t.Errorf("resolveAssetInfo(ui/button) dest = %q, want \"site/src/shared/wk/ui/button/\"", got)
+		if got != "site/src/shared/wk/ui/" {
+			t.Errorf("resolveAssetInfo(ui/button) dest = %q, want \"site/src/shared/wk/ui/\"", got)
 		}
 	})
 
 	t.Run("unknown asset", func(t *testing.T) {
 		got, _ := resolveAssetInfo("nonexistent", "1.0.0", reg, mgr)
-		if got != "site/src/shared/wk/ui/nonexistent/" {
+		if got != "site/src/shared/wk/ui/" {
 			t.Errorf("resolveAssetInfo(nonexistent) dest = %q, want fallback path", got)
 		}
 	})
 
 	t.Run("nil registry", func(t *testing.T) {
 		got, _ := resolveAssetInfo("ui/button", "1.0.0", nil, mgr)
-		if got != "site/src/shared/wk/ui/button/" {
+		if got != "site/src/shared/wk/ui/" {
 			t.Errorf("resolveAssetInfo with nil reg dest = %q, want fallback path", got)
 		}
 	})
@@ -694,7 +742,7 @@ func TestUIInstall_Idempotent(t *testing.T) {
 		t.Errorf("idempotent install: v1=%q, v2=%q", v1, v2)
 	}
 
-	btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
+	btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
 	data, _ := os.ReadFile(btnFile)
 	if len(data) == 0 {
 		t.Error("button.tsx should have content after double install")
@@ -765,7 +813,7 @@ func TestDiffAsset_DeletedFile(t *testing.T) {
 	// Install button, then delete a file
 	asset.InstallUIAsset(mgr, "ui/button", "1.0.0", projectDir)
 
-	btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
+	btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
 	os.Remove(btnFile)
 
 	reg, _ := mgr.GetRegistry("ui")

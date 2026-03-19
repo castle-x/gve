@@ -9,6 +9,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 )
 
@@ -30,10 +31,9 @@ func initFrontend(projectDir, projectName string, cfg *config.Config, scaffoldKe
 	if _, ok := reg[scaffoldKey]; !ok {
 		available := reg.ListByCategory("scaffold")
 		if len(available) == 0 {
-			return fmt.Errorf("scaffold %q not found and no scaffolds available in registry", scaffoldKey)
+			return fmt.Errorf("%s", i18n.Tf("init_fe_scaffold_not_found", scaffoldKey))
 		}
-		return fmt.Errorf("scaffold %q not found. Available scaffolds:\n  %s",
-			scaffoldKey, formatScaffoldList(available))
+		return fmt.Errorf("%s", i18n.Tf("init_fe_scaffold_list", scaffoldKey, formatScaffoldList(available)))
 	}
 
 	// Get latest version
@@ -67,6 +67,7 @@ func initFrontend(projectDir, projectName string, cfg *config.Config, scaffoldKe
 		filepath.Join(destDir, "src", "views"),
 		filepath.Join(destDir, "src", "shared", "wk", "ui"),
 		filepath.Join(destDir, "src", "shared", "wk", "components"),
+		filepath.Join(destDir, "src", "shared", "wk", "hooks"),
 		filepath.Join(destDir, "src", "shared", "shadcn"),
 	}
 	for _, dir := range placeholders {
@@ -98,24 +99,24 @@ func initFrontend(projectDir, projectName string, cfg *config.Config, scaffoldKe
 	siteDir := filepath.Join(projectDir, dest)
 
 	// Install npm dependencies
-	fmt.Println("  Installing npm dependencies...")
+	fmt.Println(i18n.T("init_fe_npm_install"))
 	if err := runNodeInstall(siteDir); err != nil {
 		return fmt.Errorf("npm install: %w", err)
 	}
 
 	// Install shadcn components if specified
 	if len(meta.ShadcnDeps) > 0 {
-		fmt.Printf("  Installing shadcn components: %s\n", strings.Join(meta.ShadcnDeps, ", "))
+		fmt.Println(i18n.Tf("init_fe_shadcn", strings.Join(meta.ShadcnDeps, ", ")))
 		if err := installShadcnComponents(siteDir, meta.ShadcnDeps); err != nil {
-			fmt.Printf("  ⚠ shadcn install failed: %v (continuing...)\n", err)
+			fmt.Println(i18n.Tf("init_fe_shadcn_warn", err))
 		}
 	}
 
 	// Install default UI assets
 	if len(meta.DefaultAssets) > 0 {
-		fmt.Println("  Installing default UI assets...")
+		fmt.Println(i18n.T("init_fe_assets"))
 		for _, assetKey := range meta.DefaultAssets {
-			fmt.Printf("    → %s\n", assetKey)
+			fmt.Println(i18n.Tf("init_fe_asset_arrow", assetKey))
 
 			// Install asset with recursive peerDeps
 			installed := make(map[string]bool)
@@ -178,31 +179,55 @@ func formatScaffoldList(scaffolds []string) string {
 }
 
 // replaceBrandName replaces __PROJECT_NAME__ placeholders in scaffold files
-// with the actual project name.
+// with the actual project name. Scans site/ root files and all files under site/src/.
 func replaceBrandName(projectDir, projectName string) error {
-	targets := []string{
-		filepath.Join(projectDir, "site", "package.json"),
-		filepath.Join(projectDir, "site", "index.html"),
+	siteDir := filepath.Join(projectDir, "site")
+
+	// Root-level files
+	rootTargets := []string{
+		filepath.Join(siteDir, "package.json"),
+		filepath.Join(siteDir, "index.html"),
+		filepath.Join(siteDir, "app.json"),
 	}
 
-	for _, path := range targets {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue // file may not exist in all scaffolds
-			}
-			return fmt.Errorf("read %s: %w", path, err)
-		}
-
-		original := string(data)
-		replaced := strings.ReplaceAll(original, "__PROJECT_NAME__", projectName)
-		if replaced != original {
-			if err := os.WriteFile(path, []byte(replaced), 0644); err != nil {
-				return fmt.Errorf("write %s: %w", path, err)
-			}
+	for _, path := range rootTargets {
+		if err := replaceInFile(path, "__PROJECT_NAME__", projectName); err != nil {
+			return err
 		}
 	}
 
+	// Walk site/src/ for any remaining placeholders
+	srcDir := filepath.Join(siteDir, "src")
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		ext := filepath.Ext(path)
+		switch ext {
+		case ".ts", ".tsx", ".js", ".jsx", ".json", ".html":
+			return replaceInFile(path, "__PROJECT_NAME__", projectName)
+		}
+		return nil
+	})
+}
+
+// replaceInFile replaces all occurrences of old with new in a file. Skips if file doesn't exist.
+func replaceInFile(path, old, new string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+
+	original := string(data)
+	replaced := strings.ReplaceAll(original, old, new)
+	if replaced != original {
+		if err := os.WriteFile(path, []byte(replaced), 0644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+	}
 	return nil
 }
 
@@ -210,7 +235,7 @@ func replaceBrandName(projectDir, projectName string) error {
 // Falls back to pnpm dlx if npx is not available.
 func installShadcnComponents(siteDir string, components []string) error {
 	args := append([]string{"shadcn@latest", "add"}, components...)
-	args = append(args, "--yes")
+	args = append(args, "--yes", "--overwrite")
 
 	// Try npx first
 	if _, err := exec.LookPath("npx"); err == nil {

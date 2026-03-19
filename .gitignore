@@ -2,7 +2,7 @@
 dist/
 *.exe
 /gve
-
+/test
 # Go
 *.test
 coverage.out

@@ -9,6 +9,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/castle-x/gve/internal/semver"
 	"github.com/spf13/cobra"
@@ -17,17 +18,16 @@ import (
 func newUIPushCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "push <name>",
-		Short: "发布 UI 组件到 wk-ui registry",
-		Long: `扫描组件的 TSX import 语句，自动识别 npm 依赖和 wk-ui 内部组件依赖，
-生成 meta.json 并发布到 wk-ui 远程仓库。`,
-		Args: cobra.ExactArgs(1),
-		RunE: runUIPush,
+		Short: i18n.T("ui_push_short"),
+		Long:  i18n.T("ui_push_long"),
+		Args:  cobra.ExactArgs(1),
+		RunE:  runUIPush,
 	}
 
-	cmd.Flags().String("version", "", "版本号 (如 1.0.0)，不指定则自动从 gve.lock patch +1")
-	cmd.Flags().String("source", "", "组件源目录路径，不指定则从项目 shared/wk/ 下查找")
-	cmd.Flags().String("desc", "", "组件描述")
-	cmd.Flags().Bool("dry-run", false, "预览模式，不实际发布")
+	cmd.Flags().String("version", "", i18n.T("ui_push_flag_version"))
+	cmd.Flags().String("source", "", i18n.T("ui_push_flag_source"))
+	cmd.Flags().String("desc", "", i18n.T("ui_push_flag_desc"))
+	cmd.Flags().Bool("dry-run", false, i18n.T("ui_push_flag_dry_run"))
 
 	return cmd
 }
@@ -51,20 +51,20 @@ func runUIPush(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("locate source: %w", err)
 	}
-	fmt.Printf("📁 Source: %s\n", sourceDir)
+	fmt.Println(i18n.Tf("ui_push_source", sourceDir))
 
 	// ── Phase 2: Scan TSX imports ──
-	fmt.Printf("🔍 Scanning imports...\n")
+	fmt.Println(i18n.T("ui_push_scanning"))
 	scanResult, err := asset.ScanDir(sourceDir)
 	if err != nil {
 		return fmt.Errorf("scan imports: %w", err)
 	}
-	fmt.Printf("   Scanned %d files\n", len(scanResult.ScannedFiles))
+	fmt.Println(i18n.Tf("ui_push_scanned", len(scanResult.ScannedFiles)))
 	if len(scanResult.Deps) > 0 {
-		fmt.Printf("   npm deps: %s\n", strings.Join(scanResult.Deps, ", "))
+		fmt.Println(i18n.Tf("ui_push_npm_deps", strings.Join(scanResult.Deps, ", ")))
 	}
 	if len(scanResult.PeerDeps) > 0 {
-		fmt.Printf("   peerDeps: %s\n", strings.Join(scanResult.PeerDeps, ", "))
+		fmt.Println(i18n.Tf("ui_push_peer_deps", strings.Join(scanResult.PeerDeps, ", ")))
 	}
 
 	// ── Phase 3: Determine version ──
@@ -72,7 +72,7 @@ func runUIPush(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve version: %w", err)
 	}
-	fmt.Printf("📦 Version: %s\n", version)
+	fmt.Println(i18n.Tf("ui_push_version", version))
 
 	// ── Phase 4: Build meta.json ──
 	files, err := collectFiles(sourceDir)
@@ -98,18 +98,29 @@ func runUIPush(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("📋 Meta: %d files, %d deps, %d peerDeps\n",
-		len(meta.Files), len(meta.Deps), len(meta.PeerDeps))
+	fmt.Println(i18n.Tf("ui_push_meta", len(meta.Files), len(meta.Deps), len(meta.PeerDeps)))
 
 	// ── Phase 5: Publish to registry cache ──
 	cacheDir := cfg.UICacheDir()
 
 	// Ensure cache exists
 	mgr := asset.NewManager(cfg.CacheDir)
-	fmt.Printf("🔄 Updating registry cache...\n")
+	fmt.Println(i18n.T("ui_push_updating_cache"))
 	if !dryRun {
 		if err := mgr.EnsureCache(cfg.UIRegistry, "ui"); err != nil {
 			return fmt.Errorf("update cache: %w", err)
+		}
+	}
+
+	// Check peerDeps exist in registry
+	if len(scanResult.PeerDeps) > 0 {
+		regPath := filepath.Join(cacheDir, "registry.json")
+		if reg, err := asset.LoadRegistry(regPath); err == nil {
+			for _, dep := range scanResult.PeerDeps {
+				if _, ok := reg[dep]; !ok {
+					fmt.Println(i18n.Tf("ui_push_peer_warn", dep))
+				}
+			}
 		}
 	}
 
@@ -133,16 +144,16 @@ func runUIPush(cmd *cobra.Command, args []string) error {
 		lockPath := filepath.Join(projectDir, "gve.lock")
 		lf, err := lock.Load(lockPath)
 		if err != nil {
-			fmt.Printf("⚠️  Could not update gve.lock: %v\n", err)
+			fmt.Println(i18n.Tf("ui_push_lock_warn", err))
 		} else {
 			lf.SetUIAsset(registryKey, version)
 			if err := lf.Save(lockPath); err != nil {
-				fmt.Printf("⚠️  Could not save gve.lock: %v\n", err)
+				fmt.Println(i18n.Tf("ui_push_lock_save_warn", err))
 			}
 		}
 	}
 
-	fmt.Printf("\n✅ Published %s@%s\n", registryKey, version)
+	fmt.Println(i18n.Tf("ui_push_ok", registryKey, version))
 	return nil
 }
 
@@ -175,6 +186,7 @@ func resolveSourceDir(name, sourceFlag, projectDir string) (dir string, category
 	}{
 		{filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", name), "ui"},
 		{filepath.Join(projectDir, "site", "src", "shared", "wk", "components", name), "components"},
+		{filepath.Join(projectDir, "site", "src", "shared", "wk", "hooks", name), "hooks"},
 	}
 
 	for _, c := range candidates {
@@ -184,10 +196,7 @@ func resolveSourceDir(name, sourceFlag, projectDir string) (dir string, category
 		}
 	}
 
-	return "", "", fmt.Errorf(
-		"component %q not found in project. Looked in:\n  - site/src/shared/wk/ui/%s/\n  - site/src/shared/wk/components/%s/\nUse --source to specify a custom path",
-		name, name, name,
-	)
+	return "", "", fmt.Errorf("%s", i18n.Tf("ui_push_not_found", name, name, name, name))
 }
 
 // resolveVersion determines the version to publish.
@@ -263,6 +272,8 @@ func inferCategoryFromPath(path string) string {
 				return "ui"
 			case "components":
 				return "components"
+			case "hooks":
+				return "hooks"
 			}
 		}
 	}
@@ -271,10 +282,14 @@ func inferCategoryFromPath(path string) string {
 
 // inferMetaCategory converts directory category to meta.json category value.
 func inferMetaCategory(category string) string {
-	if category == "components" {
+	switch category {
+	case "components":
 		return "component"
+	case "hooks":
+		return "hook"
+	default:
+		return category
 	}
-	return category
 }
 
 // tryLoadExistingMeta attempts to load meta.json from a directory, returning nil on failure.

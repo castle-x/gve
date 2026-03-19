@@ -76,7 +76,7 @@ func WriteRegistry(reg Registry, path string) error {
 	return os.WriteFile(path, append(data, '\n'), 0644)
 }
 
-var v2Categories = []string{"scaffold", "ui", "components", "global"}
+var v2Categories = []string{"scaffold", "ui", "components", "hooks"}
 
 // BuildRegistryV2 scans the four category directories and builds a v2 Registry.
 // Returns the registry and any warnings (CSS in ui/components, category mismatch).
@@ -95,8 +95,11 @@ func BuildRegistryV2(rootDir string) (Registry, []string, error) {
 		}
 
 		expectedCategory := category
-		if category == "components" {
+		switch category {
+		case "components":
 			expectedCategory = "component"
+		case "hooks":
+			expectedCategory = "hook"
 		}
 
 		for _, entry := range entries {
@@ -134,12 +137,26 @@ func BuildRegistryV2(rootDir string) (Registry, []string, error) {
 				}
 
 				// CSS file warning for ui/ and components/
-				if category == "ui" || category == "components" {
+				if category == "ui" || category == "components" || category == "hooks" {
 					for _, f := range meta.Files {
 						if strings.HasSuffix(f, ".css") {
 							warnings = append(warnings, fmt.Sprintf(
 								"Warning: %s contains CSS files. ui/ and components/ assets should use Tailwind classes only.", registryKey))
 							break
+						}
+					}
+
+					// Scan for undeclared CSS files in directory
+					declared := make(map[string]bool)
+					for _, f := range meta.Files {
+						declared[f] = true
+					}
+					if actualFiles, err := collectAllFiles(versionDir); err == nil {
+						for _, f := range actualFiles {
+							if strings.HasSuffix(f, ".css") && !declared[f] {
+								warnings = append(warnings, fmt.Sprintf(
+									"Warning: %s has undeclared CSS file %q in directory", registryKey, f))
+							}
 						}
 					}
 				}
@@ -178,4 +195,27 @@ func WriteRegistryV2(reg Registry, path string) error {
 		return fmt.Errorf("marshal registry: %w", err)
 	}
 	return os.WriteFile(path, append(data, '\n'), 0644)
+}
+
+// collectAllFiles recursively lists all files in dir, returning paths relative to dir.
+func collectAllFiles(dir string) ([]string, error) {
+	var files []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		if rel == "meta.json" {
+			return nil
+		}
+		files = append(files, rel)
+		return nil
+	})
+	return files, err
 }

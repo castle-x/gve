@@ -8,6 +8,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +16,7 @@ import (
 func newUIAddCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add <asset>[@version]",
-		Short: "安装 UI 资产",
+		Short: i18n.T("ui_add_short"),
 		Args:  cobra.ExactArgs(1),
 		RunE:  runUIAdd,
 	}
@@ -32,7 +33,7 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
 	mgr := asset.NewManager(cfg.CacheDir)
 
-	fmt.Printf("Updating UI registry cache...\n")
+	fmt.Println(i18n.T("ui_add_cache"))
 	if err := mgr.EnsureCache(cfg.UIRegistry, "ui"); err != nil {
 		return fmt.Errorf("update cache: %w", err)
 	}
@@ -45,14 +46,14 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 	// Resolve shortname to full key
 	fullName, ok := reg.ResolveAssetName(name)
 	if !ok {
-		return fmt.Errorf("asset %q not found in registry. Try: gve ui add ui/%s or components/%s", name, name, name)
+		return fmt.Errorf("%s", i18n.Tf("ui_add_not_found", name, name, name))
 	}
 
-	fmt.Printf("Installing %s", fullName)
+	installing := i18n.Tf("ui_add_installing", fullName)
 	if version != "" {
-		fmt.Printf("@%s", version)
+		installing += "@" + version
 	}
-	fmt.Println("...")
+	fmt.Println(installing + "...")
 
 	installedResult, err := asset.InstallUIAssetFull(mgr, fullName, version, projectDir)
 	if err != nil {
@@ -78,17 +79,17 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 
 	peerDeps, err := asset.ResolvePeerDepsRecursive(mgr, fullName, installed, 5)
 	if err != nil {
-		fmt.Printf("  ⚠ peerDeps resolution failed: %v\n", err)
+		fmt.Println(i18n.Tf("ui_add_peer_warn", err))
 	}
 	for _, dep := range peerDeps {
-		fmt.Printf("  → peerDep %s: installing...\n", dep)
+		fmt.Println(i18n.Tf("ui_add_peer_installing", dep))
 		depVer, err := asset.InstallUIAsset(mgr, dep, "", projectDir)
 		if err != nil {
-			fmt.Printf("  → peerDep %s: failed: %v\n", dep, err)
+			fmt.Println(i18n.Tf("ui_add_peer_fail", dep, err))
 			continue
 		}
 		lf.SetUIAsset(dep, depVer)
-		fmt.Printf("  → peerDep %s: installed v%s\n", dep, depVer)
+		fmt.Println(i18n.Tf("ui_add_peer_ok", dep, depVer))
 	}
 
 	if err := lf.Save(lockPath); err != nil {
@@ -98,13 +99,13 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 	// Auto-run npm install if new deps were injected
 	if depsInjected {
 		siteDir := filepath.Join(projectDir, "site")
-		fmt.Println("  New npm dependencies detected, running install...")
+		fmt.Println(i18n.T("ui_add_npm_detect"))
 		if err := runNodeInstall(siteDir); err != nil {
-			fmt.Printf("  ⚠ npm install failed: %v\n", err)
+			fmt.Println(i18n.Tf("ui_add_npm_warn", err))
 		}
 	}
 
-	fmt.Printf("✓ Installed %s@%s\n", fullName, installedVer)
+	fmt.Println(i18n.Tf("ui_add_ok", fullName, installedVer))
 	return nil
 }
 
@@ -136,5 +137,5 @@ func findProjectRoot() (string, error) {
 		dir = parent
 	}
 
-	return "", fmt.Errorf("gve.lock not found — are you inside a GVE project?")
+	return "", fmt.Errorf("%s", i18n.T("common_lock_not_found"))
 }

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/runner"
 )
 
@@ -24,7 +25,7 @@ func runNodeInstall(dir string) error {
 		}, os.Stdout, os.Stderr); err == nil {
 			return nil
 		}
-		fmt.Println("  \u26a0 pnpm install failed, falling back to npm...")
+		fmt.Println(i18n.T("pkg_pnpm_fallback"))
 	}
 
 	// Try npm
@@ -36,10 +37,10 @@ func runNodeInstall(dir string) error {
 		}, os.Stdout, os.Stderr); err == nil {
 			return nil
 		}
-		return fmt.Errorf("npm install failed in %s", dir)
+		return fmt.Errorf("%s", i18n.Tf("pkg_npm_fail", dir))
 	}
 
-	return fmt.Errorf("neither pnpm nor npm is available or working. Please install pnpm (npm install -g pnpm) or npm (https://nodejs.org)")
+	return fmt.Errorf("%s", i18n.T("pkg_none_available"))
 }
 
 // detectPackageManager detects the preferred package manager for a site directory.

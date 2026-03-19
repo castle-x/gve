@@ -92,12 +92,6 @@ func writeMetaWithPeerDeps(t *testing.T, dir, name, version, category string, pe
 	os.WriteFile(filepath.Join(dir, "meta.json"), data, 0644)
 }
 
-func writeMetaGlobal(t *testing.T, dir, name, version, dest string, files []string) {
-	t.Helper()
-	m := Meta{Name: name, Version: version, Category: "global", Dest: dest, Files: files}
-	data, _ := json.Marshal(m)
-	os.WriteFile(filepath.Join(dir, "meta.json"), data, 0644)
-}
 
 func TestBuildRegistryV2(t *testing.T) {
 	dir := t.TempDir()
@@ -120,12 +114,6 @@ func TestBuildRegistryV2(t *testing.T) {
 	writeMetaWithPeerDeps(t, d, "data-table", "2.0.0", "component", []string{"ui/spinner"})
 	os.WriteFile(filepath.Join(d, "data-table.tsx"), []byte("export const DataTable = () => null"), 0644)
 
-	// global/theme/v1.0.0
-	d = filepath.Join(dir, "global", "theme", "v1.0.0")
-	os.MkdirAll(d, 0755)
-	writeMetaGlobal(t, d, "theme", "1.0.0", "site/src/app/styles", []string{"globals.css"})
-	os.WriteFile(filepath.Join(d, "globals.css"), []byte(":root{}"), 0644)
-
 	reg, warnings, err := BuildRegistryV2(dir)
 	if err != nil {
 		t.Fatalf("BuildRegistryV2: %v", err)
@@ -135,7 +123,7 @@ func TestBuildRegistryV2(t *testing.T) {
 	}
 
 	// Check keys
-	expected := []string{"scaffold/default", "ui/spinner", "components/data-table", "global/theme"}
+	expected := []string{"scaffold/default", "ui/spinner", "components/data-table"}
 	for _, key := range expected {
 		if _, ok := reg[key]; !ok {
 			t.Errorf("missing key %q", key)
@@ -208,6 +196,33 @@ func TestBuildRegistryV2_CategoryMismatchWarning(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected category mismatch warning, got: %v", warnings)
+	}
+}
+
+func TestBuildRegistryV2_UndeclaredCSSWarning(t *testing.T) {
+	dir := t.TempDir()
+
+	// ui/sneaky has a .css file on disk but NOT declared in meta.json
+	d := filepath.Join(dir, "ui", "sneaky", "v1.0.0")
+	os.MkdirAll(d, 0755)
+	meta := Meta{Name: "sneaky", Version: "1.0.0", Category: "ui", Files: []string{"sneaky.tsx"}}
+	data, _ := json.Marshal(meta)
+	os.WriteFile(filepath.Join(d, "meta.json"), data, 0644)
+	os.WriteFile(filepath.Join(d, "sneaky.tsx"), []byte("x"), 0644)
+	os.WriteFile(filepath.Join(d, "hidden.css"), []byte(".x{}"), 0644) // undeclared!
+
+	_, warnings, err := BuildRegistryV2(dir)
+	if err != nil {
+		t.Fatalf("BuildRegistryV2: %v", err)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "undeclared CSS") && strings.Contains(w, "hidden.css") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected undeclared CSS warning for hidden.css, got: %v", warnings)
 	}
 }
 

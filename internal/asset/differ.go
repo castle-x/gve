@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 type FileDiff struct {
@@ -78,35 +80,17 @@ func HasLocalChanges(localDir, cacheDir string, files []string) bool {
 	return false
 }
 
+// unifiedDiff produces a standard unified diff using the Myers algorithm (via go-difflib).
 func unifiedDiff(filename, original, modified string) string {
-	origLines := splitLines(original)
-	modLines := splitLines(modified)
-
-	var buf strings.Builder
-	buf.WriteString(fmt.Sprintf("--- a/%s\n", filename))
-	buf.WriteString(fmt.Sprintf("+++ b/%s\n", filename))
-
-	maxLen := len(origLines)
-	if len(modLines) > maxLen {
-		maxLen = len(modLines)
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(original),
+		B:        difflib.SplitLines(modified),
+		FromFile: "a/" + filename,
+		ToFile:   "b/" + filename,
+		Context:  3,
 	}
-
-	i, j := 0, 0
-	for i < len(origLines) || j < len(modLines) {
-		if i < len(origLines) && j < len(modLines) && origLines[i] == modLines[j] {
-			buf.WriteString(" " + origLines[i] + "\n")
-			i++
-			j++
-		} else if i < len(origLines) {
-			buf.WriteString("-" + origLines[i] + "\n")
-			i++
-		} else {
-			buf.WriteString("+" + modLines[j] + "\n")
-			j++
-		}
-	}
-
-	return buf.String()
+	text, _ := difflib.GetUnifiedDiffString(diff)
+	return text
 }
 
 func formatDeletedDiff(filename, content string) string {

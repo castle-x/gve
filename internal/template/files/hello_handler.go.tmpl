@@ -1,0 +1,28 @@
+package handler
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	hello "{{.ProjectName}}/internal/api/{{.ProjectName}}/hello/v1"
+)
+
+type HelloHandler struct{}
+
+func NewHelloHandler() *HelloHandler { return &HelloHandler{} }
+
+func (h *HelloHandler) SayHello(w http.ResponseWriter, r *http.Request) {
+	var req hello.SayHelloReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+	name := req.Name
+	if name == "" {
+		name = "World"
+	}
+	resp := hello.SayHelloResp{Message: fmt.Sprintf("Hello, %s!", name)}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}

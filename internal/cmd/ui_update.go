@@ -9,20 +9,21 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
 
-func newUISyncCmd() *cobra.Command {
+func newUIUpdateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "sync [asset]",
-		Short: "同步 UI 资产",
-		Long:  "将 UI 资产升级到最新版本。指定资产名只同步该资产，否则同步全部。",
-		RunE:  runUISync,
+		Use:   "update [asset]",
+		Short: i18n.T("ui_update_short"),
+		Long:  i18n.T("ui_update_long"),
+		RunE:  runUIUpdate,
 	}
 }
 
-func runUISync(cmd *cobra.Command, args []string) error {
+func runUIUpdate(cmd *cobra.Command, args []string) error {
 	projectDir, err := findProjectRoot()
 	if err != nil {
 		return err
@@ -36,7 +37,7 @@ func runUISync(cmd *cobra.Command, args []string) error {
 	}
 
 	mgr := asset.NewManager(cfg.CacheDir)
-	fmt.Println("Updating UI registry cache...")
+	fmt.Println(i18n.T("ui_update_cache"))
 	if err := mgr.EnsureCache(cfg.UIRegistry, "ui"); err != nil {
 		return fmt.Errorf("update cache: %w", err)
 	}
@@ -63,39 +64,39 @@ func runUISync(cmd *cobra.Command, args []string) error {
 	var upgraded, skipped int
 
 	for _, name := range targets {
-		// scaffold assets are only used during init, skip during sync
+		// scaffold assets are only used during init, skip during update
 		if strings.HasPrefix(name, "scaffold/") {
 			continue
 		}
 
 		entry, ok := lf.UI.Assets[name]
 		if !ok {
-			fmt.Printf("  %s: not installed, skipping\n", name)
+			fmt.Println(i18n.Tf("ui_update_not_installed", name))
 			continue
 		}
 
 		info, ok := reg[name]
 		if !ok {
-			fmt.Printf("  %s: not found in registry\n", name)
+			fmt.Println(i18n.Tf("ui_update_not_in_reg", name))
 			continue
 		}
 
 		if entry.Version == info.Latest {
-			fmt.Printf("  %s: %s (already latest)\n", name, entry.Version)
+			fmt.Println(i18n.Tf("ui_update_already_latest", name, entry.Version))
 			skipped++
 			continue
 		}
 
 		ve, ok := info.Versions[entry.Version]
 		if !ok {
-			fmt.Printf("  %s: current version %s not found in registry, skipping\n", name, entry.Version)
+			fmt.Println(i18n.Tf("ui_update_ver_not_found", name, entry.Version))
 			continue
 		}
 
 		cacheDir := mgr.GetAssetDir("ui", ve.Path)
 		meta, err := asset.LoadMeta(filepath.Join(cacheDir, "meta.json"))
 		if err != nil {
-			fmt.Printf("  %s: cannot load meta: %v\n", name, err)
+			fmt.Println(i18n.Tf("ui_update_meta_fail", name, err))
 			continue
 		}
 
@@ -116,11 +117,11 @@ func runUISync(cmd *cobra.Command, args []string) error {
 
 		hasChanges := asset.HasLocalChanges(localDir, cacheDir, meta.Files)
 
-		fmt.Printf("\n  %s: %s → %s\n", name, entry.Version, info.Latest)
+		fmt.Println(i18n.Tf("ui_update_arrow", name, entry.Version, info.Latest))
 
 		if hasChanges {
-			fmt.Println("  ⚠ Local modifications detected")
-			action := promptSyncAction()
+			fmt.Println(i18n.T("ui_update_local_mod"))
+			action := promptUpdateAction()
 
 			switch action {
 			case "o", "u":
@@ -132,14 +133,14 @@ func runUISync(cmd *cobra.Command, args []string) error {
 						fmt.Println(d.Diff)
 					}
 				}
-				fmt.Print("  Proceed with overwrite? [y/n]: ")
+				fmt.Print(i18n.T("ui_update_confirm"))
 				if !confirmYes() {
-					fmt.Printf("  Skipped %s\n", name)
+					fmt.Println(i18n.Tf("ui_update_skipped", name))
 					skipped++
 					continue
 				}
 			case "k", "s":
-				fmt.Printf("  Skipped %s\n", name)
+				fmt.Println(i18n.Tf("ui_update_skipped", name))
 				skipped++
 				continue
 			}
@@ -147,12 +148,12 @@ func runUISync(cmd *cobra.Command, args []string) error {
 
 		installedVer, err := asset.InstallUIAsset(mgr, name, info.Latest, projectDir)
 		if err != nil {
-			fmt.Printf("  ✗ Failed to upgrade %s: %v\n", name, err)
+			fmt.Println(i18n.Tf("ui_update_fail", name, err))
 			continue
 		}
 
 		lf.SetUIAsset(name, installedVer)
-		fmt.Printf("  ✓ Upgraded %s to %s\n", name, installedVer)
+		fmt.Println(i18n.Tf("ui_update_ok", name, installedVer))
 		upgraded++
 	}
 
@@ -162,16 +163,16 @@ func runUISync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\nUI sync complete: %d upgraded, %d skipped\n", upgraded, skipped)
+	fmt.Println(i18n.Tf("ui_update_summary", upgraded, skipped))
 	return nil
 }
 
-func promptSyncAction() string {
-	fmt.Println("  Options:")
-	fmt.Println("    [u] upgrade  — discard local changes, install new version")
-	fmt.Println("    [d] diff     — show diff, then decide")
-	fmt.Println("    [k] keep     — skip this asset")
-	fmt.Println("    [s] skip     — skip this asset")
+func promptUpdateAction() string {
+	fmt.Println(i18n.T("ui_update_options"))
+	fmt.Println(i18n.T("ui_update_opt_upgrade"))
+	fmt.Println(i18n.T("ui_update_opt_diff"))
+	fmt.Println(i18n.T("ui_update_opt_keep"))
+	fmt.Println(i18n.T("ui_update_opt_skip"))
 	fmt.Print("  > ")
 
 	reader := bufio.NewReader(os.Stdin)

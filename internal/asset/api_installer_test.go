@@ -86,7 +86,7 @@ func TestInstallAPIAsset_Latest(t *testing.T) {
 
 // TestAPIAssetDirExists_AfterManualDelete simulates the QA-reported bug:
 // when the api directory is manually deleted, APIAssetDirExists returns false
-// so api sync can detect the missing files and reinstall.
+// so api update can detect the missing files and reinstall.
 func TestAPIAssetDirExists_AfterManualDelete(t *testing.T) {
 	projectDir := t.TempDir()
 	dir := filepath.Join(projectDir, "api", "my-project", "user", "v1")

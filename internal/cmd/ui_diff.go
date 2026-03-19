@@ -7,6 +7,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
@@ -14,8 +15,8 @@ import (
 func newUIDiffCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "diff <asset>",
-		Short: "查看资产差异",
-		Long:  "对比本地资产文件与资产库对应版本的差异。",
+		Short: i18n.T("ui_diff_short"),
+		Long:  i18n.T("ui_diff_long"),
 		Args:  cobra.ExactArgs(1),
 		RunE:  runUIDiff,
 	}
@@ -112,7 +113,7 @@ func runUIDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	if !hasChanges {
-		fmt.Printf("%s@%s: no local changes\n", assetName, version)
+		fmt.Println(i18n.Tf("ui_diff_no_changes", assetName, version))
 	}
 
 	return nil

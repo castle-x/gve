@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/runner"
 	"github.com/spf13/cobra"
 )
@@ -15,13 +16,13 @@ import (
 func newBuildCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
-		Short: "构建单二进制文件",
-		Long:  "先构建 Vite 前端，再构建 Go 后端，产出内嵌前端的单二进制文件。",
+		Short: i18n.T("build_short"),
+		Long:  i18n.T("build_long"),
 		RunE:  runBuild,
 	}
-	cmd.Flags().StringP("output", "o", "", "输出文件路径（默认 dist/<project-name>）")
-	cmd.Flags().String("os", "", "目标操作系统（GOOS），如 linux, darwin, windows")
-	cmd.Flags().String("arch", "", "目标架构（GOARCH），如 amd64, arm64")
+	cmd.Flags().StringP("output", "o", "", i18n.T("build_flag_output"))
+	cmd.Flags().String("os", "", i18n.T("build_flag_os"))
+	cmd.Flags().String("arch", "", i18n.T("build_flag_arch"))
 	return cmd
 }
 
@@ -33,7 +34,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 	siteDir := filepath.Join(projectDir, "site")
 	if _, err := os.Stat(siteDir); os.IsNotExist(err) {
-		return fmt.Errorf("site/ directory not found — run 'gve init' first")
+		return fmt.Errorf("%s", i18n.T("build_site_not_found"))
 	}
 
 	projectName, err := extractProjectName(projectDir)
@@ -56,7 +57,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Step 1: Frontend build
-	fmt.Println("Building frontend...")
+	fmt.Println(i18n.T("build_frontend"))
 	if err := runNodeInstall(siteDir); err != nil {
 		return fmt.Errorf("install dependencies: %w", err)
 	}
@@ -72,12 +73,12 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 	distDir := filepath.Join(siteDir, "dist")
 	if _, err := os.Stat(distDir); os.IsNotExist(err) {
-		return fmt.Errorf("frontend build did not produce site/dist/ — check vite config")
+		return fmt.Errorf("%s", i18n.T("build_frontend_no_dist"))
 	}
-	fmt.Println("  ✓ Frontend build complete")
+	fmt.Println(i18n.T("build_frontend_ok"))
 
 	// Step 2: Go backend build
-	fmt.Println("Building backend...")
+	fmt.Println(i18n.T("build_backend"))
 
 	outputAbs := output
 	if !filepath.IsAbs(output) {

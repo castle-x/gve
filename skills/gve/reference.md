@@ -29,6 +29,7 @@ wk-ui/
 │   │       ├── meta.json              # category: "scaffold", dest: "site"
 │   │       ├── embed.go
 │   │       ├── package.json           # React 19、Tailwind 4、Vite 7
+│   │       ├── app.json              # 品牌配置（name、displayName）
 │   │       ├── vite.config.ts
 │   │       ├── tsconfig.json
 │   │       ├── biome.json
@@ -142,14 +143,15 @@ registry key = `{category_dir}/{asset_name}`（如 `ui/spinner`、`components/da
 **校验规则**：
 1. `meta.json` 中 `category` 字段（如有）必须与所在目录一致
 2. `ui/` 和 `components/` 目录下的资产，`files` 列表不得包含 `.css` 后缀文件
-3. 违反时输出 warning
+3. `ui/` 和 `components/` 目录中存在但未声明在 `meta.Files` 中的 `.css` 文件也会被检测
+4. 违反时输出 warning
 
 ### 新增 UI 资产完整流程（推荐：gve ui push）
 
 在业务项目中修改完组件后直接发布：
 
 ```bash
-# 1. 修改组件（如 site/src/shared/wk/ui/spinner/spinner.tsx）
+# 1. 修改组件（如 site/src/shared/wk/ui/spinner.tsx）
 # 2. 发布新版本（自动扫描 import、生成 meta.json、commit + push）
 gve ui push spinner --version 1.1.0 --desc "Spinner with CVA variants"
 
@@ -161,7 +163,7 @@ gve ui push spinner --dry-run
 ```
 
 `gve ui push` 完整流程：
-1. **定位源目录**：`--source` 优先，否则查找 `shared/wk/ui/{name}` 或 `shared/wk/components/{name}`
+1. **定位源目录**：`--source` 优先，否则查找 `shared/wk/ui/{name}.tsx` 或 `shared/wk/components/{name}.tsx`
 2. **扫描 TSX import**：遍历 .ts/.tsx（排除 .d.ts），识别 npm deps 和 wk-ui peerDeps
 3. **确定版本号**：`--version` > gve.lock patch+1 > registry latest patch+1 > 1.0.0
 4. **构建 meta.json**：合并扫描结果 + 文件列表
@@ -290,7 +292,33 @@ wk-api/
 - **目录即版本**：`v1/` 和 `v2/` 并存，业务项目自行选择
 - **零工具链依赖**：使用方从资产库拉取，不需要安装 Thrift 编译器
 
-### 新增 API 契约流程
+### 新增 API 契约流程（推荐：gve api push）
+
+在业务项目中编辑完 thrift 文件后直接发布：
+
+```bash
+# 发布到 wk-api registry（自动 git commit + push）
+gve api push ai-worker/task                    # 自动检测版本
+gve api push ai-worker/task --version v2       # 指定版本
+gve api push ai-worker/task --source ./mythrift/ --version v1
+gve api push ai-worker/task --dry-run          # 预览模式
+```
+
+`gve api push` 完整流程：
+1. **定位源目录**：`--source` 优先，否则查找 `api/{project}/{resource}/` 下最高版本目录
+2. **确定版本号**：`--version` > 从源目录名推断（如 `v1/` → push `v1`）
+3. **验证 .thrift 文件**：源目录中至少有一个 `.thrift` 文件
+4. **发布到 registry cache**：git pull → 版本冲突检查 → 复制 `.thrift` 文件 → 重建 `registry.json` → git commit + push
+5. **更新 gve.lock**
+
+与 UI push 的关键区别：
+- **无需扫描**：thrift 自包含，不需要分析 import
+- **无 meta.json**：API registry 无 meta
+- **版本格式**：major-only（v1, v2），不是 semver
+
+### 新增 API 契约流程（手动方式，在 wk-api 仓库）
+
+> 仅在无法使用 `gve api push` 时使用。
 
 ```bash
 # 在 wk-api 仓库内
@@ -337,27 +365,53 @@ gve api generate                # 生成 internal/api/.../{resource}.go + client
 
 ## 4. scaffold 资产说明
 
-> v1 中称为 `base-setup`，v2 重命名为 `scaffold/default`。
-
 `scaffold/default` 是骨架类资产（`category: "scaffold"`, `dest: "site"`），由 `gve init` 安装，提供：
 
 - `site/embed.go` — `go:embed all:dist` 嵌入指令
 - `site/package.json` — 最小依赖集（react、react-dom、react-router、clsx、tailwind-merge、tailwindcss、vite 等）
+- `site/app.json` — 品牌配置（`name` 和 `displayName` 字段，使用 `__PROJECT_NAME__` 占位符）
 - `site/vite.config.ts` — `@/` 别名、`/api/*` 代理到 Go 后端（`:8080`）
 - `site/tsconfig.json` — strict 模式、路径别名
 - `site/biome.json` — Lint + Format 规则
-- `site/index.html` — Vite 入口
+- `site/index.html` — Vite 入口（支持 `__PROJECT_NAME__` 占位符替换）
+- `site/app.json` — 品牌配置（`name` 和 `displayName` 字段，使用 `__PROJECT_NAME__` 占位符；前端通过 `import app from "app.json"` 读取品牌信息）
 - `site/src/app/main.tsx` — `ReactDOM.createRoot` 挂载
-- `site/src/app/routes.tsx` — 路由表（初始一个空首页）
+- `site/src/app/routes.tsx` — 路由表（初始一个首页，含 API 调用示例）
 - `site/src/app/providers.tsx` — 全局 Provider 壳
 - `site/src/app/styles/globals.css` — `@import "tailwindcss"` + CSS 变量
 - `site/src/shared/lib/cn.ts` — `clsx + tailwind-merge` 封装
+
+### scaffold 专用 meta.json 字段
+
+scaffold 类型的 meta.json 可额外声明两个字段，`gve init` 会自动处理：
+
+```json
+{
+  "name": "dashboard",
+  "category": "scaffold",
+  "dest": "site",
+  "defaultAssets": ["ui/spinner", "components/settings-dropdown"],
+  "shadcnDeps": ["button", "card", "dialog", "sidebar", "tooltip"],
+  "files": [...]
+}
+```
+
+- `defaultAssets`：`gve init` 时自动安装的 wk-ui 组件（含递归 peerDeps 解析）
+- `shadcnDeps`：`gve init` 时自动通过 `npx shadcn@latest add --overwrite` 安装的 shadcn 组件（`--overwrite` 避免交互提示）
+
+### 品牌名替换
+
+scaffold 文件中可使用 `__PROJECT_NAME__` 占位符，`gve init` 会递归扫描 `site/src/` 下所有 `.ts/.tsx/.js/.jsx/.json/.html` 文件，将 `__PROJECT_NAME__` 替换为实际项目名。同时也替换 `site/package.json` 和 `site/index.html`。
 
 `scaffold/dashboard` 在 `scaffold/default` 基础上额外提供：
 - 侧栏布局（SidebarProvider + AppSidebar + SidebarInset）
 - Header 组件
 - 基本页面骨架
-- 依赖的 shadcn 组件配置
+- 依赖的 shadcn 组件配置（通过 `shadcnDeps` 声明）
+
+### nanomind scaffold 首页 SayHello 演示
+
+scaffold 首页包含一个 API 调用示例区域：输入框 + "Say Hello" 按钮，调用生成的 `HelloServiceClient`，展示前后端联通效果。
 
 ---
 
@@ -394,7 +448,10 @@ mux.Handle("/", http.FileServer(http.FS(site.DistDirFS)))
 ## 6. gve dev 行为说明
 
 - 检测 `air` 是否安装：已安装用 Air 热重载，否则用 `go run ./cmd/server`
-- Vite 开发服务器在 `site/` 目录执行 `pnpm dev`
+- **包管理器自动检测**：优先检测 `pnpm-lock.yaml`（用 pnpm），其次 `package-lock.json`（用 npm），再次 `exec.LookPath`
+- Vite 开发服务器在 `site/` 目录执行 `{pm} dev`（pm = 检测到的包管理器）
+- **自动传递 `VITE_BACKEND_TARGET`**：`gve dev` 会自动将 `VITE_BACKEND_TARGET=http://localhost:{port}` 传递给 Vite 进程，确保前端代理始终指向 Go 后端的实际端口
+- 启动前自动执行 `{pm} install`（pnpm 不可用时降级为 npm）
 - 输出前缀：`[go]`（蓝色）/ `[vite]`（绿色）
 - `Ctrl+C` 同时终止两个进程
 
@@ -435,6 +492,22 @@ mux.Handle("/", http.FileServer(http.FS(site.DistDirFS)))
 | UIRegistry | `github.com/castle-x/wk-ui` |
 | APIRegistry | `github.com/castle-x/wk-api` |
 | CacheDir | `~/.gve/cache/` |
+
+### i18n（国际化）
+
+CLI 输出支持中文/英文双语。语言检测优先级：
+
+| 环境变量 | 说明 |
+|----------|------|
+| `GVE_LANG` | 最高优先级，设为 `en` 或 `zh` |
+| `LANG` | 系统语言环境变量 |
+| `LC_ALL` | 系统语言环境变量 |
+| 默认 | `zh`（中文） |
+
+```bash
+# 切换为英文输出
+export GVE_LANG=en
+```
 
 ---
 
@@ -542,14 +615,11 @@ site/src/
     │   ├── sidebar.tsx
     │   └── ...
     ├── wk/                   # wk-ui 自研资产（gve ui add 安装）
-    │   ├── ui/               # UI 原子组件
-    │   │   ├── spinner/
-    │   │   │   └── spinner.tsx
-    │   │   └── input-group/
-    │   │       └── input-group.tsx
-    │   └── components/       # 业务复杂组件
-    │       └── data-table/
-    │           └── data-table.tsx
+    │   ├── ui/               # UI 原子组件（扁平存放）
+    │   │   ├── spinner.tsx
+    │   │   └── input-group.tsx
+    │   └── components/       # 业务复杂组件（扁平存放）
+    │       └── data-table.tsx
     ├── lib/                  # 纯工具函数（无副作用，无业务逻辑）
     │   ├── cn.ts             # clsx + tailwind-merge（scaffold 提供）
     │   └── request.ts        # fetch 封装（按需添加）
@@ -589,14 +659,14 @@ export function UserCard({ user }: { user: User }) { ... }
 | 来源 | 安装方式 | 目录 | Import 路径 | 可否修改 |
 |------|---------|------|-------------|---------|
 | shadcn/ui | `npx shadcn add` | `shared/shadcn/` | `@/shared/shadcn/{name}` | 通过 className 扩展 |
-| wk-ui (UI 原子) | `gve ui add ui/xxx` | `shared/wk/ui/{name}/` | `@/shared/wk/ui/{name}/{name}` | 可以，diff 追踪 |
-| wk-ui (业务组件) | `gve ui add components/xxx` | `shared/wk/components/{name}/` | `@/shared/wk/components/{name}/{name}` | 可以，diff 追踪 |
+| wk-ui (UI 原子) | `gve ui add ui/xxx` | `shared/wk/ui/` | `@/shared/wk/ui/{name}` | 可以，diff 追踪 |
+| wk-ui (业务组件) | `gve ui add components/xxx` | `shared/wk/components/` | `@/shared/wk/components/{name}` | 可以，diff 追踪 |
 
 ```tsx
 // 正确：从各自来源引入
 import { Button } from "@/shared/shadcn/button";           // shadcn
-import { Spinner } from "@/shared/wk/ui/spinner/spinner";  // wk-ui 原子
-import { DataTable } from "@/shared/wk/components/data-table/data-table"; // wk-ui 业务
+import { Spinner } from "@/shared/wk/ui/spinner";          // wk-ui 原子
+import { DataTable } from "@/shared/wk/components/data-table"; // wk-ui 业务
 
 // 错误：手动在 shared/wk/ 下创建组件
 // 错误：在 shared/shadcn/ 下手动创建非 shadcn 组件
@@ -623,31 +693,45 @@ import { DataTable } from "@/shared/wk/components/data-table/data-table"; // wk-
 
 `peerDeps` 声明了一个 wk-ui 资产对其他 wk-ui 资产的依赖关系。典型场景：`components/data-table` 依赖 `ui/button`、`ui/spinner`。
 
-### 12.2 解析流程
+### 12.2 递归解析流程
+
+`gve ui add` 使用 BFS（广度优先）递归解析 peerDeps 链：
 
 ```
 gve ui add components/data-table
   │
   ├── 读取 meta.json → peerDeps: ["ui/button", "ui/spinner"]
   │
+  ├── BFS 遍历 peerDeps 链（最大深度 5 层）
+  │   ├── ui/button → 检查其 peerDeps（如有）→ 递归
+  │   └── ui/spinner → 检查其 peerDeps（如有）→ 递归
+  │
+  ├── 拓扑排序：叶子节点先安装（确保依赖顺序）
+  │
   ├── 检查 gve.lock
-  │   ├── ui/button: 已安装 v1.2.0 ✓
-  │   └── ui/spinner: 未安装 ✗
+  │   ├── ui/button: 已安装 v1.2.0 ✓（跳过）
+  │   └── ui/spinner: 未安装 ✗（安装 latest）
   │
-  ├── 自动安装 ui/spinner@latest (v1.0.0)
-  │   └── 递归检查 ui/spinner 的 peerDeps（如有）
+  ├── 安装 components/data-table 到 shared/wk/components/
   │
-  ├── 安装 components/data-table 到 shared/wk/components/data-table/
+  ├── 更新 gve.lock
   │
-  └── 更新 gve.lock
+  └── 自动执行 pnpm install（如果有新 npm deps 被注入）
 ```
 
-### 12.3 循环依赖检测
+### 12.3 循环依赖 & 钻石依赖检测
 
-- 维护已访问集合（visited set），检测到循环引用时中断并报错
-- 最大递归深度 5 层，超过时报 warning
+- **visited set**：防止重复访问同一节点
+- **钻石依赖**（A→B→D, A→C→D）：D 只安装一次（合法，不报错）
+- **循环依赖**（A→B→A）：跳过已访问节点，不死循环
+- **最大深度 5 层**，超出时打印警告并停止
 
-### 12.4 版本冲突
+### 12.4 npm deps 自动安装
 
-- 如果 peerDep 已安装但版本低于资产要求的最低版本（future feature），提示用户是否升级
-- 当前版本不做最低版本检查，始终使用已安装版本或 latest
+- `gve ui add` 安装组件后，如果 `injectDeps` 向 `package.json` 注入了新的 npm 依赖，自动执行 `runNodeInstall`
+- `deps` 字段支持 `name@version` 格式（如 `"lucide-react@^0.300.0"`），不指定版本时默认 `"latest"`
+
+### 12.5 scaffold 资产的特殊处理
+
+- `gve sync` 和 `gve ui update` **自动跳过** `scaffold/` 前缀的资产（scaffold 只在 `gve init` 时使用，不参与后续升级）
+- scaffold 资产的 meta.json 可额外声明 `defaultAssets`（wk 组件）和 `shadcnDeps`（shadcn 组件），在 `gve init` 时自动安装

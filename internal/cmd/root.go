@@ -4,52 +4,50 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/version"
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "gve",
-	Short: "GVE - Go + Vite + Embed 全栈项目脚手架",
-	Long:  "GVE 是一个用于管理 Go + Vite + Embed 全栈项目的 CLI 工具，\n提供项目初始化、UI/API 资产管理、开发服务器和构建等功能。",
-}
+func Execute() {
+	i18n.MustInit()
 
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "显示版本信息",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(version.Full())
-	},
-}
+	rootCmd := &cobra.Command{
+		Use:                   "gve",
+		Short:                 i18n.T("root_short"),
+		Long:                  i18n.T("root_long"),
+		CompletionOptions:     cobra.CompletionOptions{DisableDefaultCmd: true},
+	}
 
-var uiCmd = &cobra.Command{
-	Use:   "ui",
-	Short: "管理 UI 资产",
-}
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: i18n.T("version_short"),
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println(version.Full())
+		},
+	}
 
-var apiCmd = &cobra.Command{
-	Use:   "api",
-	Short: "管理 API 契约",
-}
+	uiCmd := &cobra.Command{
+		Use:   "ui",
+		Short: i18n.T("ui_short"),
+	}
 
-var registryCmd = &cobra.Command{
-	Use:   "registry",
-	Short: "管理资产库 registry",
-}
+	apiCmd := &cobra.Command{
+		Use:   "api",
+		Short: i18n.T("api_short"),
+	}
 
-func init() {
 	uiCmd.AddCommand(newUIAddCmd())
 	uiCmd.AddCommand(newUIListCmd())
-	uiCmd.AddCommand(newUISyncCmd())
+	uiCmd.AddCommand(newUIUpdateCmd())
 	uiCmd.AddCommand(newUIDiffCmd())
 	uiCmd.AddCommand(newUIPushCmd())
 
 	apiCmd.AddCommand(newAPIAddCmd())
-	apiCmd.AddCommand(newAPISyncCmd())
+	apiCmd.AddCommand(newAPIUpdateCmd())
 	apiCmd.AddCommand(newAPINewCmd())
 	apiCmd.AddCommand(newAPIGenerateCmd())
-
-	registryCmd.AddCommand(newRegistryBuildCmd())
+	apiCmd.AddCommand(newAPIPushCmd())
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(newInitCmd())
@@ -61,10 +59,7 @@ func init() {
 	rootCmd.AddCommand(newSyncCmd())
 	rootCmd.AddCommand(newStatusCmd())
 	rootCmd.AddCommand(newDoctorCmd())
-	rootCmd.AddCommand(registryCmd)
-}
 
-func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

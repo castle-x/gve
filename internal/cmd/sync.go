@@ -8,6 +8,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +16,7 @@ import (
 func newSyncCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "sync",
-		Short: "根据 gve.lock 还原所有资产",
+		Short: i18n.T("sync_short"),
 		RunE:  runSync,
 	}
 }
@@ -38,7 +39,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Sync UI assets
 	if len(lf.UI.Assets) > 0 {
 		mgr := asset.NewManager(cfg.CacheDir)
-		fmt.Println("Syncing UI assets...")
+		fmt.Println(i18n.T("sync_ui"))
 		if err := mgr.EnsureCache(cfg.UIRegistry, "ui"); err != nil {
 			return fmt.Errorf("update ui cache: %w", err)
 		}
@@ -59,10 +60,10 @@ func runSync(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			fmt.Printf("  Installing %s@%s...\n", name, entry.Version)
+			fmt.Println(i18n.Tf("sync_installing", name, entry.Version))
 			_, err := asset.InstallUIAsset(mgr, name, entry.Version, projectDir)
 			if err != nil {
-				fmt.Printf("  ✗ Failed to install %s: %v\n", name, err)
+				fmt.Println(i18n.Tf("sync_fail", name, err))
 				continue
 			}
 			installed++
@@ -72,7 +73,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Sync API assets
 	if len(lf.API.Assets) > 0 {
 		apiMgr := asset.NewManager(cfg.CacheDir)
-		fmt.Println("Syncing API assets...")
+		fmt.Println(i18n.T("sync_api"))
 		if err := apiMgr.EnsureCache(cfg.APIRegistry, "api"); err != nil {
 			return fmt.Errorf("update api cache: %w", err)
 		}
@@ -83,17 +84,17 @@ func runSync(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			fmt.Printf("  Installing %s@%s...\n", name, entry.Version)
+			fmt.Println(i18n.Tf("sync_installing", name, entry.Version))
 			_, err := asset.InstallAPIAsset(apiMgr, name, entry.Version, projectDir)
 			if err != nil {
-				fmt.Printf("  ✗ Failed to install %s: %v\n", name, err)
+				fmt.Println(i18n.Tf("sync_fail", name, err))
 				continue
 			}
 			installed++
 		}
 	}
 
-	fmt.Printf("\nSync complete: %d installed, %d skipped (already present)\n", installed, skipped)
+	fmt.Println(i18n.Tf("sync_summary", installed, skipped))
 	return nil
 }
 

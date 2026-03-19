@@ -10,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/runner"
 	"github.com/spf13/cobra"
 )
@@ -17,12 +18,12 @@ import (
 func newDevCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dev",
-		Short: "启动开发服务器（Go + Vite）",
-		Long:  "并发启动 Go 后端和 Vite 前端开发服务器。\nGo 后端优先使用 Air 热重载，未安装则 fallback 到 go run。",
+		Short: i18n.T("dev_short"),
+		Long:  i18n.T("dev_long"),
 		RunE:  runDev,
 	}
-	cmd.Flags().IntP("port", "p", 8080, "Go 后端端口")
-	cmd.Flags().Int("vite-port", 5173, "Vite 开发服务器端口")
+	cmd.Flags().IntP("port", "p", 8080, i18n.T("dev_flag_port"))
+	cmd.Flags().Int("vite-port", 5173, i18n.T("dev_flag_vite_port"))
 	return cmd
 }
 
@@ -34,7 +35,7 @@ func runDev(cmd *cobra.Command, args []string) error {
 
 	siteDir := filepath.Join(projectDir, "site")
 	if _, err := os.Stat(siteDir); os.IsNotExist(err) {
-		return fmt.Errorf("site/ directory not found — run 'gve init' first")
+		return fmt.Errorf("%s", i18n.T("dev_site_not_found"))
 	}
 
 	// Ensure site/dist/ exists so go:embed all:dist doesn't fail in dev mode.
@@ -52,7 +53,7 @@ func runDev(cmd *cobra.Command, args []string) error {
 	// Auto-run npm install if node_modules is missing.
 	nodeModules := filepath.Join(siteDir, "node_modules")
 	if _, err := os.Stat(nodeModules); os.IsNotExist(err) {
-		fmt.Println("  node_modules not found, running install...")
+		fmt.Println(i18n.T("dev_node_modules"))
 		if err := runNodeInstall(siteDir); err != nil {
 			return fmt.Errorf("install dependencies: %w", err)
 		}
@@ -76,11 +77,12 @@ func runDev(cmd *cobra.Command, args []string) error {
 		Name: pm,
 		Args: []string{"dev", "--port", fmt.Sprintf("%d", vitePort)},
 		Dir:  siteDir,
+		Env:  []string{fmt.Sprintf("VITE_BACKEND_TARGET=http://localhost:%d", port)},
 	}
 
-	fmt.Printf("Starting dev server...\n")
-	fmt.Printf("  Go backend:  http://localhost:%d\n", port)
-	fmt.Printf("  Vite frontend: http://localhost:%d\n", vitePort)
+	fmt.Println(i18n.T("dev_starting"))
+	fmt.Println(i18n.Tf("dev_go_backend", port))
+	fmt.Println(i18n.Tf("dev_vite_frontend", vitePort))
 	fmt.Println()
 
 	var wg sync.WaitGroup
@@ -119,7 +121,7 @@ func runDev(cmd *cobra.Command, args []string) error {
 		return e
 	}
 
-	fmt.Println("\nDev server stopped.")
+	fmt.Println(i18n.T("dev_stopped"))
 	return nil
 }
 
@@ -136,8 +138,8 @@ func buildGoDevOpts(projectDir string, port int) runner.CommandOpts {
 		}
 	}
 
-	fmt.Println("  ℹ Air not found, using 'go run' (no hot reload)")
-	fmt.Println("    Install Air: go install github.com/air-verse/air@latest")
+	fmt.Println(i18n.T("dev_air_missing"))
+	fmt.Println(i18n.T("dev_air_hint"))
 	fmt.Println()
 
 	return runner.CommandOpts{

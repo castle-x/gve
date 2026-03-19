@@ -8,6 +8,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
@@ -15,7 +16,7 @@ import (
 func newUIListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "列出已安装 UI 资产",
+		Short: i18n.T("ui_list_short"),
 		RunE:  runUIList,
 	}
 }
@@ -33,7 +34,7 @@ func runUIList(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(lf.UI.Assets) == 0 {
-		fmt.Println("No UI assets installed.")
+		fmt.Println(i18n.T("ui_list_none"))
 		return nil
 	}
 

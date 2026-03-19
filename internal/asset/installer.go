@@ -105,22 +105,24 @@ func loadMetaForAsset(mgr *Manager, reg Registry, assetName string) *Meta {
 }
 
 // GetInstallPath returns the project-relative install directory for an asset.
+// For single-file assets (components, ui, hooks), files are placed directly
+// in the category directory (e.g. site/src/shared/wk/components/) rather than
+// in a per-asset subdirectory.
 func GetInstallPath(category, name, dest string) string {
 	if dest != "" {
 		return dest
 	}
 	switch category {
 	case "ui":
-		return fmt.Sprintf("site/src/shared/wk/ui/%s", name)
+		return "site/src/shared/wk/ui"
 	case "component":
-		return fmt.Sprintf("site/src/shared/wk/components/%s", name)
+		return "site/src/shared/wk/components"
+	case "hook":
+		return "site/src/shared/wk/hooks"
 	case "scaffold":
 		return "site"
-	case "global":
-		return "" // global must have dest
 	default:
-		// Backward compat fallback
-		return fmt.Sprintf("site/src/shared/wk/ui/%s", name)
+		return "site/src/shared/wk/ui"
 	}
 }
 

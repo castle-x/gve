@@ -30,6 +30,8 @@ func Scaffold(projectDir string, data ScaffoldData) error {
 		{"Makefile.tmpl", "Makefile"},
 		{"gitignore.tmpl", ".gitignore"},
 		{"gve.lock.tmpl", "gve.lock"},
+		{"hello_handler.go.tmpl", "internal/handler/hello_handler.go"},
+		{"hello.thrift.tmpl", "api/" + data.ProjectName + "/hello/v1/hello.thrift"},
 	}
 
 	for _, m := range mappings {
@@ -62,7 +64,6 @@ func Scaffold(projectDir string, data ScaffoldData) error {
 
 	// Create placeholder directories with .gitkeep
 	keepDirs := []string{
-		"internal/handler",
 		"internal/service",
 		"api",
 	}

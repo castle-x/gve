@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"{{.ProjectName}}/internal/handler"
 	"{{.ProjectName}}/site"
 )
 
@@ -19,6 +20,9 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"status":"ok"}`)
 	})
+
+	helloHandler := handler.NewHelloHandler()
+	mux.HandleFunc("POST /api/hello/SayHello", helloHandler.SayHello)
 
 	// Static file server with SPA fallback
 	staticFS := site.DistDirFS

@@ -7,6 +7,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +15,7 @@ import (
 func newAPIAddCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "add <project>/<resource>[@version]",
-		Short: "安装 API 契约",
+		Short: i18n.T("api_add_short"),
 		Args:  cobra.ExactArgs(1),
 		RunE:  runAPIAdd,
 	}
@@ -24,7 +25,7 @@ func runAPIAdd(cmd *cobra.Command, args []string) error {
 	resourcePath, version := parseAPIAssetArg(args[0])
 
 	if !strings.Contains(resourcePath, "/") {
-		return fmt.Errorf("invalid API resource path %q — expected format: project/resource (e.g. ai-worker/task)", resourcePath)
+		return fmt.Errorf("%s", i18n.Tf("api_add_invalid", resourcePath))
 	}
 
 	projectDir, err := findProjectRoot()
@@ -35,16 +36,16 @@ func runAPIAdd(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
 	mgr := asset.NewManager(cfg.CacheDir)
 
-	fmt.Println("Updating API registry cache...")
+	fmt.Println(i18n.T("api_add_cache"))
 	if err := mgr.EnsureCache(cfg.APIRegistry, "api"); err != nil {
 		return fmt.Errorf("update cache: %w", err)
 	}
 
-	fmt.Printf("Installing %s", resourcePath)
+	installing := i18n.Tf("api_add_installing", resourcePath)
 	if version != "" {
-		fmt.Printf("@%s", version)
+		installing += "@" + version
 	}
-	fmt.Println("...")
+	fmt.Println(installing + "...")
 
 	installedVer, err := asset.InstallAPIAsset(mgr, resourcePath, version, projectDir)
 	if err != nil {
@@ -61,7 +62,7 @@ func runAPIAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save gve.lock: %w", err)
 	}
 
-	fmt.Printf("✓ Installed %s@%s\n", resourcePath, installedVer)
+	fmt.Println(i18n.Tf("api_add_ok", resourcePath, installedVer))
 	return nil
 }
 

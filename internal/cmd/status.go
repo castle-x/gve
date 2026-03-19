@@ -7,6 +7,7 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
@@ -14,8 +15,8 @@ import (
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "显示资产状态",
-		Long:  "对比 gve.lock 与资产库 registry，显示每个已安装资产的版本及可用更新。",
+		Short: i18n.T("status_short"),
+		Long:  i18n.T("status_long"),
 		RunE:  runAssetStatus,
 	}
 }
@@ -34,20 +35,20 @@ func runAssetStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(lf.UI.Assets) == 0 && len(lf.API.Assets) == 0 {
-		fmt.Println("No assets installed.")
+		fmt.Println(i18n.T("status_none"))
 		return nil
 	}
 
 	mgr := asset.NewManager(cfg.CacheDir)
 
 	if len(lf.UI.Assets) > 0 {
-		fmt.Println("[UI]")
+		fmt.Println(i18n.T("status_ui_header"))
 		if err := mgr.EnsureCache(cfg.UIRegistry, "ui"); err != nil {
-			fmt.Printf("  ⚠ Cannot update UI registry: %v\n", err)
+			fmt.Println(i18n.Tf("status_ui_cache_warn", err))
 		} else {
 			uiReg, err := mgr.GetRegistry("ui")
 			if err != nil {
-				fmt.Printf("  ⚠ Cannot load UI registry: %v\n", err)
+				fmt.Println(i18n.Tf("status_ui_reg_warn", err))
 			} else {
 				printAssetStatus(lf.UI.Assets, uiReg)
 			}
@@ -56,13 +57,13 @@ func runAssetStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(lf.API.Assets) > 0 {
-		fmt.Println("[API]")
+		fmt.Println(i18n.T("status_api_header"))
 		if err := mgr.EnsureCache(cfg.APIRegistry, "api"); err != nil {
-			fmt.Printf("  ⚠ Cannot update API registry: %v\n", err)
+			fmt.Println(i18n.Tf("status_api_cache_warn", err))
 		} else {
 			apiReg, err := mgr.GetRegistry("api")
 			if err != nil {
-				fmt.Printf("  ⚠ Cannot load API registry: %v\n", err)
+				fmt.Println(i18n.Tf("status_api_reg_warn", err))
 			} else {
 				printAssetStatus(lf.API.Assets, apiReg)
 			}
@@ -83,13 +84,13 @@ func printAssetStatus(assets map[string]lock.AssetEntry, reg asset.Registry) {
 		entry := assets[name]
 		info, ok := reg[name]
 		if !ok {
-			fmt.Printf("  %-30s %s (not in registry)\n", name, entry.Version)
+			fmt.Printf("  %-30s %s %s\n", name, entry.Version, i18n.T("status_not_in_reg"))
 			continue
 		}
 		if entry.Version == info.Latest {
-			fmt.Printf("  %-30s %s (latest)\n", name, entry.Version)
+			fmt.Printf("  %-30s %s %s\n", name, entry.Version, i18n.T("status_latest"))
 		} else {
-			fmt.Printf("  %-30s %s → %s available\n", name, entry.Version, info.Latest)
+			fmt.Printf("  %-30s %s %s\n", name, entry.Version, i18n.Tf("status_available", info.Latest))
 		}
 	}
 }

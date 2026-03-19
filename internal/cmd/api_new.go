@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/template"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +23,7 @@ type apiSkeletonData struct {
 func newAPINewCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "new <project>/<resource> [version]",
-		Short: "在项目内创建 API thrift 骨架",
+		Short: i18n.T("api_new_short"),
 		Args:  cobra.RangeArgs(1, 2),
 		RunE:  runAPINew,
 	}
@@ -39,7 +40,7 @@ func runAPINew(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
 		version = strings.TrimSpace(args[1])
 		if version == "" {
-			return fmt.Errorf("version cannot be empty")
+			return fmt.Errorf("%s", i18n.T("api_new_empty_version"))
 		}
 	}
 
@@ -55,7 +56,7 @@ func runAPINew(cmd *cobra.Command, args []string) error {
 
 	thriftPath := filepath.Join(destDir, resource+".thrift")
 	if _, err := os.Stat(thriftPath); err == nil {
-		return fmt.Errorf("thrift file already exists: %s", thriftPath)
+		return fmt.Errorf("%s", i18n.Tf("api_new_exists", thriftPath))
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("check thrift file: %w", err)
 	}
@@ -76,15 +77,15 @@ func runAPINew(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("write thrift skeleton: %w", err)
 	}
 
-	fmt.Printf("✓ Created %s\n", thriftPath)
-	fmt.Println("Edit the thrift file, then run: gve api generate")
+	fmt.Println(i18n.Tf("api_new_ok", thriftPath))
+	fmt.Println(i18n.T("api_new_hint"))
 	return nil
 }
 
 func parseAPIResourceTarget(target string) (project, resource string, err error) {
 	parts := strings.Split(target, "/")
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return "", "", fmt.Errorf("invalid target %q — expected format: project/resource", target)
+		return "", "", fmt.Errorf("%s", i18n.Tf("api_new_invalid_target", target))
 	}
 	return parts[0], parts[1], nil
 }

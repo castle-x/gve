@@ -204,8 +204,4 @@ func TestRegistry_ListByCategory(t *testing.T) {
 	if len(comps) != 1 || comps[0] != "components/data-table" {
 		t.Errorf("components = %v", comps)
 	}
-	empty := reg.ListByCategory("global")
-	if len(empty) != 0 {
-		t.Errorf("global = %v, want empty", empty)
-	}
 }

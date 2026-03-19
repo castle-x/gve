@@ -65,7 +65,6 @@ func TestInferCategory(t *testing.T) {
 		{"scaffold/default/v1.0.0", "scaffold"},
 		{"ui/spinner/v1.0.0", "ui"},
 		{"components/data-table/v2.0.0", "component"},
-		{"global/theme/v1.0.0", "global"},
 		{"assets/button/v1.0.0", ""},
 		{"", ""},
 	}

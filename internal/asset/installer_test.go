@@ -58,7 +58,7 @@ func TestInstallUIAsset(t *testing.T) {
 	}
 
 	// v1 assets with no category infer "" from "assets/..." path, fallback to shared/wk/ui/
-	destFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button", "button.tsx")
+	destFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
 	body, err := os.ReadFile(destFile)
 	if err != nil {
 		t.Fatalf("read copied file: %v", err)
@@ -158,8 +158,8 @@ func TestInstallUIAsset_V2_UICategory(t *testing.T) {
 		t.Errorf("version = %q", ver)
 	}
 
-	// Should install to shared/wk/ui/spinner/
-	destFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "spinner", "spinner.tsx")
+	// Should install to shared/wk/ui/ (flat)
+	destFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "spinner.tsx")
 	if _, err := os.Stat(destFile); err != nil {
 		t.Fatalf("spinner.tsx not installed to v2 path: %v", err)
 	}
@@ -204,8 +204,8 @@ func TestInstallUIAsset_V2_ComponentCategory(t *testing.T) {
 		t.Errorf("version = %q", ver)
 	}
 
-	// Should install to shared/wk/components/data-table/
-	destFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "components", "data-table", "data-table.tsx")
+	// Should install to shared/wk/components/ (flat, no subdirectory)
+	destFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "components", "data-table.tsx")
 	if _, err := os.Stat(destFile); err != nil {
 		t.Fatalf("data-table.tsx not installed to v2 path: %v", err)
 	}
@@ -218,12 +218,11 @@ func TestGetInstallPath(t *testing.T) {
 		dest     string
 		want     string
 	}{
-		{"ui", "spinner", "", "site/src/shared/wk/ui/spinner"},
-		{"component", "data-table", "", "site/src/shared/wk/components/data-table"},
-		{"global", "theme", "site/src/app/styles", "site/src/app/styles"},
+		{"ui", "spinner", "", "site/src/shared/wk/ui"},
+		{"component", "data-table", "", "site/src/shared/wk/components"},
 		{"scaffold", "default", "site", "site"},
 		{"scaffold", "default", "", "site"},
-		{"", "button", "", "site/src/shared/wk/ui/button"}, // fallback
+		{"", "button", "", "site/src/shared/wk/ui"}, // fallback
 	}
 	for _, tt := range tests {
 		t.Run(tt.category+"/"+tt.name, func(t *testing.T) {

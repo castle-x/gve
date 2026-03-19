@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/castle-x/gve/internal/version"
 	"github.com/spf13/cobra"
@@ -16,8 +17,8 @@ import (
 func newDoctorCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
-		Short: "检查开发环境",
-		Long:  "检查 GVE 项目所需的开发环境依赖。",
+		Short: i18n.T("doctor_short"),
+		Long:  i18n.T("doctor_long"),
 		RunE:  runDoctor,
 	}
 }
@@ -31,7 +32,7 @@ type checkResult struct {
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
-	fmt.Printf("GVE Doctor (%s)\n\n", version.Full())
+	fmt.Printf("%s\n\n", i18n.Tf("doctor_title", version.Full()))
 
 	results := []checkResult{
 		checkGo(),
@@ -57,9 +58,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	if allOk {
-		fmt.Println("All checks passed.")
+		fmt.Println(i18n.T("doctor_all_ok"))
 	} else {
-		fmt.Println("Some checks failed. Fix the issues above before proceeding.")
+		fmt.Println(i18n.T("doctor_some_failed"))
 	}
 
 	return nil
@@ -68,7 +69,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 func checkGoPath() checkResult {
 	gopath, err := exec.Command("go", "env", "GOPATH").Output()
 	if err != nil {
-		return checkResult{name: "GOPATH/bin", ok: false, message: "cannot determine GOPATH"}
+		return checkResult{name: "GOPATH/bin", ok: false, message: i18n.T("doctor_gopath_cannot")}
 	}
 	bin := strings.TrimSpace(string(gopath)) + "/bin"
 	_, err = exec.LookPath("gve")
@@ -76,21 +77,21 @@ func checkGoPath() checkResult {
 		return checkResult{
 			name:    "GOPATH/bin",
 			ok:      false,
-			message: fmt.Sprintf("not in PATH — add to ~/.bashrc: export PATH=\"$PATH:%s\"", bin),
+			message: i18n.Tf("doctor_gopath_not_in_path", bin),
 		}
 	}
-	return checkResult{name: "GOPATH/bin", ok: true, version: "in PATH"}
+	return checkResult{name: "GOPATH/bin", ok: true, version: i18n.T("doctor_gopath_ok")}
 }
 
 func checkGo() checkResult {
 	out, err := exec.Command("go", "version").Output()
 	if err != nil {
-		return checkResult{name: "Go", ok: false, message: "not found (install from https://go.dev)"}
+		return checkResult{name: "Go", ok: false, message: i18n.T("doctor_go_not_found")}
 	}
 	ver := extractVersion(string(out))
 	major, minor := parseGoVersion(ver)
 	if major < 1 || (major == 1 && minor < 22) {
-		return checkResult{name: "Go", ok: false, message: fmt.Sprintf("%s (requires >= 1.22)", ver)}
+		return checkResult{name: "Go", ok: false, message: i18n.Tf("doctor_go_too_old", ver)}
 	}
 	return checkResult{name: "Go", ok: true, version: ver}
 }

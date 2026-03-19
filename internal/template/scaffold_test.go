@@ -30,7 +30,7 @@ func TestScaffold(t *testing.T) {
 		{"Makefile", []string{"my-app", "build-web", "build-backend"}, ""},
 		{".gitignore", []string{"dist/", ".gve/", "site/node_modules"}, ""},
 		{"gve.lock", []string{`"version": "2"`, "wk-ui", "wk-api", `"assets": {}`}, ""},
-		{"cmd/server/main.go", []string{"my-app", "site.", "ListenAndServe", "/api/health"}, ""},
+		{"cmd/server/main.go", []string{"my-app", "site.", "ListenAndServe", "/api/health", "handler.NewHelloHandler", "/api/hello/SayHello"}, ""},
 	}
 
 	for _, tt := range tests {
@@ -52,11 +52,35 @@ func TestScaffold(t *testing.T) {
 	}
 
 	// Check placeholder dirs with .gitkeep
-	keepDirs := []string{"internal/handler", "internal/service", "api"}
+	keepDirs := []string{"internal/service", "api"}
 	for _, d := range keepDirs {
 		gitkeep := filepath.Join(dir, d, ".gitkeep")
 		if _, err := os.Stat(gitkeep); err != nil {
 			t.Errorf("missing %s: %v", gitkeep, err)
+		}
+	}
+
+	// Check hello API template files
+	helloHandler := filepath.Join(dir, "internal", "handler", "hello_handler.go")
+	if body, err := os.ReadFile(helloHandler); err != nil {
+		t.Errorf("missing hello_handler.go: %v", err)
+	} else {
+		content := string(body)
+		if !strings.Contains(content, "HelloHandler") {
+			t.Errorf("hello_handler.go should contain HelloHandler")
+		}
+		if !strings.Contains(content, "my-app/internal/api/my-app/hello/v1") {
+			t.Errorf("hello_handler.go should import my-app hello package")
+		}
+	}
+
+	helloThrift := filepath.Join(dir, "api", "my-app", "hello", "v1", "hello.thrift")
+	if body, err := os.ReadFile(helloThrift); err != nil {
+		t.Errorf("missing hello.thrift: %v", err)
+	} else {
+		content := string(body)
+		if !strings.Contains(content, "HelloService") {
+			t.Errorf("hello.thrift should contain HelloService")
 		}
 	}
 }

@@ -214,7 +214,7 @@ func extractPeerDepKey(source string) (string, bool) {
 	}
 
 	category := parts[0]
-	if category != "ui" && category != "components" {
+	if category != "ui" && category != "components" && category != "hooks" {
 		return "", false
 	}
 

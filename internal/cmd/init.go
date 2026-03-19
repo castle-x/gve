@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/template"
 	"github.com/spf13/cobra"
 )
@@ -16,12 +18,12 @@ var validProjectName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init <project-name>",
-		Short: "初始化新项目",
+		Short: i18n.T("init_short"),
 		Args:  cobra.ExactArgs(1),
 		RunE:  runInit,
 	}
 
-	cmd.Flags().String("scaffold", "default", "骨架模板名称 (如 default, dashboard)")
+	cmd.Flags().String("scaffold", "default", i18n.T("init_flag_scaffold"))
 
 	return cmd
 }
@@ -31,7 +33,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	scaffoldName, _ := cmd.Flags().GetString("scaffold")
 
 	if !validProjectName.MatchString(projectName) {
-		return fmt.Errorf("invalid project name %q: must start with a letter and contain only letters, digits, hyphens, underscores", projectName)
+		return fmt.Errorf("%s", i18n.Tf("init_invalid_name", projectName))
 	}
 
 	projectDir, err := filepath.Abs(projectName)
@@ -40,15 +42,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if _, err := os.Stat(projectDir); err == nil {
-		return fmt.Errorf("directory %q already exists", projectName)
+		return fmt.Errorf("%s", i18n.Tf("init_dir_exists", projectName))
 	}
 
 	cfg := config.Default()
 
-	fmt.Printf("Creating project %s...\n", projectName)
+	fmt.Println(i18n.Tf("init_creating", projectName))
 
 	// Step 1: Scaffold Go backend
-	fmt.Println("  Generating Go backend skeleton...")
+	fmt.Println(i18n.T("init_backend_skeleton"))
 	if err := template.Scaffold(projectDir, template.ScaffoldData{
 		ProjectName: projectName,
 		UIRegistry:  cfg.UIRegistry,
@@ -59,15 +61,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Step 2: Initialize frontend from scaffold asset
 	scaffoldKey := "scaffold/" + scaffoldName
-	fmt.Printf("  Initializing frontend from %s...\n", scaffoldKey)
+	fmt.Println(i18n.Tf("init_frontend_from", scaffoldKey))
 	if err := initFrontend(projectDir, projectName, cfg, scaffoldKey); err != nil {
 		return fmt.Errorf("init frontend: %w", err)
 	}
 
-	fmt.Printf("\n✓ Project %s created successfully\n", projectName)
-	fmt.Println("\nNext steps:")
-	fmt.Printf("  cd %s\n", projectName)
-	fmt.Println("  gve dev")
+	// Step 3: Generate API artifacts from default hello.thrift
+	fmt.Println(i18n.T("init_api_artifacts"))
+	thriftPath := filepath.Join(projectDir, "api", projectName, "hello", "v1", "hello.thrift")
+	if err := asset.GenerateThriftArtifacts(projectDir, thriftPath); err != nil {
+		return fmt.Errorf("generate hello API: %w", err)
+	}
+
+	fmt.Println(i18n.Tf("init_success", projectName))
+	fmt.Println(i18n.T("init_next_steps"))
+	fmt.Println(i18n.Tf("init_next_cd", projectName))
+	fmt.Println(i18n.T("init_next_dev"))
 
 	return nil
 }

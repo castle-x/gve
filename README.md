@@ -16,13 +16,14 @@ Two companion asset libraries keep teams consistent:
 ## Features
 
 - **Project scaffolding** — `gve init` generates a Go backend + React/Vite frontend with sane defaults
-- **UI asset management** — install, diff, sync, and upgrade shared UI components across projects
+- **UI asset management** — install, diff, update, and upgrade shared UI components across projects
 - **API contract management** — install shared contracts or generate project-local API artifacts with built-in thriftgo
-- **One-command dev** — `gve dev` runs Go (with Air hot-reload) and Vite concurrently, prefixed output
+- **One-command dev** — `gve dev` runs Go (with Air hot-reload) and Vite concurrently, prefixed output, auto-sets `VITE_BACKEND_TARGET`
 - **Single-binary build** — `gve build` compiles frontend into Go via `embed`, supports cross-compilation
 - **Background service** — `gve run` with smart rebuild, PID management, and daily log rotation
 - **Team sync** — `gve.lock` tracks asset versions; `gve sync` restores them on `git pull`
 - **Environment check** — `gve doctor` verifies Go, Node, pnpm, Git, and Air
+- **i18n** — CLI output in zh/en; set `GVE_LANG=en` for English (detection: `GVE_LANG` > `LANG` > `LC_ALL` > default `zh`)
 
 ## Installation
 
@@ -88,18 +89,22 @@ gve run                  # Background with log rotation
 gve run stop|restart|status|logs
 ```
 
+> **Note**: The default `completion` subcommand is disabled.
+
 ### Asset Management
 
 ```bash
 gve ui add <asset>[@ver]                    # Install UI component
 gve ui list                                 # List installed assets
 gve ui diff <asset>                         # Local changes vs. library
-gve ui sync [asset]                         # Upgrade with conflict detection
+gve ui update [asset]                       # Upgrade with conflict detection
 
 gve api add <project>/<resource>[@ver]      # Install API contract
-gve api sync                                # Upgrade API contracts
+gve api update                              # Upgrade API contracts
 gve api new <project>/<resource> [version]  # Create local thrift skeleton
 gve api generate                            # Generate Go to internal/api and TS client to site/src/api
+gve api push <project>/<resource> [--version vN] [--source dir] [--dry-run]
+                                            # Publish thrift files to wk-api registry
 
 gve sync                                    # Restore all from gve.lock
 gve status                                  # Show available updates
@@ -125,11 +130,12 @@ my-app/
 ├── site/                      # Frontend (React + Vite)
 │   ├── embed.go               # go:embed all:dist
 │   ├── package.json
+│   ├── app.json                # Brand config (name, displayName)
 │   ├── src/
 │   │   ├── app/               # Routes, providers, styles
 │   │   ├── api/               # Generated TypeScript API client (gve api generate)
 │   │   ├── views/             # Pages
-│   │   └── shared/ui/         # UI assets (gve ui add)
+│   │   └── shared/wk/ui/     # UI assets (gve ui add)
 │   └── ...
 ├── gve.lock                   # Asset version lock (commit this)
 └── Makefile

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/castle-x/gve/internal/asset"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,7 @@ func newAPIGenerateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "generate",
 		Aliases: []string{"gen"},
-		Short:   "生成 API 代码与客户端",
+		Short:   i18n.T("api_gen_short"),
 		RunE:    runAPIGenerate,
 	}
 	return cmd
@@ -35,18 +36,18 @@ func runAPIGenerate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(thriftFiles) == 0 {
-		fmt.Println("No canonical thrift files found under api/.")
+		fmt.Println(i18n.T("api_gen_none"))
 		return nil
 	}
 
 	for _, thriftPath := range thriftFiles {
-		fmt.Printf("Generating from %s...\n", thriftPath)
+		fmt.Println(i18n.Tf("api_gen_from", thriftPath))
 		if err := generateThriftArtifacts(projectDir, thriftPath); err != nil {
 			return fmt.Errorf("generate %s: %w", thriftPath, err)
 		}
 	}
 
-	fmt.Printf("✓ Generated API artifacts for %d thrift file(s)\n", len(thriftFiles))
+	fmt.Println(i18n.Tf("api_gen_ok", len(thriftFiles)))
 	return nil
 }
 

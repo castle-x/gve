@@ -9,20 +9,21 @@ import (
 
 	"github.com/castle-x/gve/internal/asset"
 	"github.com/castle-x/gve/internal/config"
+	"github.com/castle-x/gve/internal/i18n"
 	"github.com/castle-x/gve/internal/lock"
 	"github.com/spf13/cobra"
 )
 
-func newAPISyncCmd() *cobra.Command {
+func newAPIUpdateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "sync",
-		Short: "同步 API 契约",
-		Long:  "将 API 契约升级到最新版本。",
-		RunE:  runAPISync,
+		Use:   "update",
+		Short: i18n.T("api_update_short"),
+		Long:  i18n.T("api_update_long"),
+		RunE:  runAPIUpdate,
 	}
 }
 
-func runAPISync(cmd *cobra.Command, args []string) error {
+func runAPIUpdate(cmd *cobra.Command, args []string) error {
 	projectDir, err := findProjectRoot()
 	if err != nil {
 		return err
@@ -36,12 +37,12 @@ func runAPISync(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(lf.API.Assets) == 0 {
-		fmt.Println("No API assets installed.")
+		fmt.Println(i18n.T("api_update_none"))
 		return nil
 	}
 
 	mgr := asset.NewManager(cfg.CacheDir)
-	fmt.Println("Updating API registry cache...")
+	fmt.Println(i18n.T("api_update_cache"))
 	if err := mgr.EnsureCache(cfg.APIRegistry, "api"); err != nil {
 		return fmt.Errorf("update cache: %w", err)
 	}
@@ -56,47 +57,47 @@ func runAPISync(cmd *cobra.Command, args []string) error {
 	for name, entry := range lf.API.Assets {
 		info, ok := reg[name]
 		if !ok {
-			fmt.Printf("  %s: not found in registry\n", name)
+			fmt.Println(i18n.Tf("api_update_not_in_reg", name))
 			continue
 		}
 
 		if entry.Version == info.Latest {
 			if asset.APIAssetDirExists(projectDir, name, entry.Version) {
-				fmt.Printf("  %s: %s (already latest)\n", name, entry.Version)
+				fmt.Println(i18n.Tf("api_update_already_latest", name, entry.Version))
 				skipped++
 				continue
 			}
 			// Files missing even though version matches — reinstall silently
-			fmt.Printf("  %s: %s (files missing, reinstalling...)\n", name, entry.Version)
+			fmt.Println(i18n.Tf("api_update_missing", name, entry.Version))
 			_, err := asset.InstallAPIAsset(mgr, name, entry.Version, projectDir)
 			if err != nil {
-				fmt.Printf("  ✗ Failed to reinstall %s: %v\n", name, err)
+				fmt.Println(i18n.Tf("api_update_reinstall_fail", name, err))
 			} else {
-				fmt.Printf("  ✓ Reinstalled %s@%s\n", name, entry.Version)
+				fmt.Println(i18n.Tf("api_update_reinstall_ok", name, entry.Version))
 				upgraded++
 			}
 			continue
 		}
 
-		fmt.Printf("\n  %s: %s → %s available\n", name, entry.Version, info.Latest)
-		fmt.Print("  Upgrade? [y/n]: ")
+		fmt.Println(i18n.Tf("api_update_available", name, entry.Version, info.Latest))
+		fmt.Print(i18n.T("api_update_confirm"))
 
 		reader := bufio.NewReader(os.Stdin)
 		line, _ := reader.ReadString('\n')
 		if strings.TrimSpace(strings.ToLower(line)) != "y" {
-			fmt.Printf("  Skipped %s\n", name)
+			fmt.Println(i18n.Tf("api_update_skipped", name))
 			skipped++
 			continue
 		}
 
 		installedVer, err := asset.InstallAPIAsset(mgr, name, info.Latest, projectDir)
 		if err != nil {
-			fmt.Printf("  ✗ Failed to upgrade %s: %v\n", name, err)
+			fmt.Println(i18n.Tf("api_update_fail", name, err))
 			continue
 		}
 
 		lf.SetAPIAsset(name, installedVer)
-		fmt.Printf("  ✓ Upgraded %s to %s\n", name, installedVer)
+		fmt.Println(i18n.Tf("api_update_ok", name, installedVer))
 		upgraded++
 	}
 
@@ -106,6 +107,6 @@ func runAPISync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\nAPI sync complete: %d upgraded, %d skipped\n", upgraded, skipped)
+	fmt.Println(i18n.Tf("api_update_summary", upgraded, skipped))
 	return nil
 }

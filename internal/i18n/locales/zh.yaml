@@ -7,7 +7,7 @@ api_short: "管理 API 契约"
 
 # init
 init_short: "初始化新项目"
-init_flag_scaffold: "骨架模板名称 (如 default, dashboard)"
+init_flag_scaffold: "骨架模板名称 (如 default, dashboard-01, dashboard-02)"
 init_invalid_name: "项目名 %q 无效: 必须以字母开头，只能包含字母、数字、连字符、下划线"
 init_dir_exists: "目录 %q 已存在"
 init_creating: "创建项目 %s..."

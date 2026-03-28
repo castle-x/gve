@@ -7,7 +7,7 @@ api_short: "Manage API contracts"
 
 # init
 init_short: "Initialize a new project"
-init_flag_scaffold: "Scaffold template name (e.g. default, dashboard)"
+init_flag_scaffold: "Scaffold template name (e.g. default, dashboard-01, dashboard-02)"
 init_invalid_name: "invalid project name %q: must start with a letter and contain only letters, digits, hyphens, underscores"
 init_dir_exists: "directory %q already exists"
 init_creating: "Creating project %s..."

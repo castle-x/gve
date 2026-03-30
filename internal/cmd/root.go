@@ -60,6 +60,10 @@ func Execute() {
 	rootCmd.AddCommand(newStatusCmd())
 	rootCmd.AddCommand(newDoctorCmd())
 
+	registryCmd := newRegistryCmd()
+	registryCmd.AddCommand(newRegistryBuildCmd())
+	rootCmd.AddCommand(registryCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

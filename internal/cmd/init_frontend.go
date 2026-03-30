@@ -115,7 +115,11 @@ func initFrontend(projectDir, projectName string, cfg *config.Config, scaffoldKe
 	// Install default UI assets
 	if len(meta.DefaultAssets) > 0 {
 		fmt.Println(i18n.T("init_fe_assets"))
+		var allAssetNames []string // Collect asset names for shadcn resolution
 		for _, assetKey := range meta.DefaultAssets {
+			// Parse optional @version suffix (e.g. "components/theme-provider@1.0.0")
+			assetName, assetVerConstraint := parseAssetArg(assetKey)
+
 			fmt.Println(i18n.Tf("init_fe_asset_arrow", assetKey))
 
 			// Install asset with recursive peerDeps
@@ -124,17 +128,18 @@ func initFrontend(projectDir, projectName string, cfg *config.Config, scaffoldKe
 				installed[k] = true
 			}
 
-			assetVer, err := asset.InstallUIAsset(mgr, assetKey, "", projectDir)
+			assetVer, err := asset.InstallUIAsset(mgr, assetName, assetVerConstraint, projectDir)
 			if err != nil {
 				fmt.Printf("    ✗ Failed: %v\n", err)
 				continue
 			}
-			lf.SetUIAsset(assetKey, assetVer)
-			fmt.Printf("    ✓ Installed %s@%s\n", assetKey, assetVer)
+			lf.SetUIAsset(assetName, assetVer)
+			fmt.Printf("    ✓ Installed %s@%s\n", assetName, assetVer)
+			allAssetNames = append(allAssetNames, assetName)
 
 			// Resolve and install peerDeps
-			installed[assetKey] = true
-			peerDeps, err := asset.ResolvePeerDepsRecursive(mgr, assetKey, installed, 5)
+			installed[assetName] = true
+			peerDeps, err := asset.ResolvePeerDepsRecursive(mgr, assetName, installed, 5)
 			if err != nil {
 				fmt.Printf("    ⚠ peerDeps resolution failed: %v\n", err)
 				continue
@@ -148,6 +153,18 @@ func initFrontend(projectDir, projectName string, cfg *config.Config, scaffoldKe
 				lf.SetUIAsset(dep, depVer)
 				installed[dep] = true
 				fmt.Printf("    ✓ peerDep %s@%s\n", dep, depVer)
+				allAssetNames = append(allAssetNames, dep)
+			}
+		}
+
+		// Install shadcn dependencies from all installed components
+		if len(allAssetNames) > 0 {
+			shadcnNeeded := collectShadcnDeps(mgr, allAssetNames[0], allAssetNames[1:], projectDir)
+			if len(shadcnNeeded) > 0 {
+				fmt.Println(i18n.Tf("ui_add_shadcn", strings.Join(shadcnNeeded, ", ")))
+				if err := installShadcnComponents(siteDir, shadcnNeeded); err != nil {
+					fmt.Println(i18n.Tf("ui_add_shadcn_warn", err))
+				}
 			}
 		}
 

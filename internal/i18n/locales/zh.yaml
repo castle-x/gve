@@ -130,6 +130,8 @@ ui_add_peer_fail: "  → peerDep %s: 失败: %v"
 ui_add_peer_ok: "  → peerDep %s: 已安装 v%s"
 ui_add_npm_detect: "  检测到新 npm 依赖，正在安装..."
 ui_add_npm_warn: "  ⚠ npm install 失败: %v"
+ui_add_shadcn: "  安装 shadcn 依赖: %s"
+ui_add_shadcn_warn: "  ⚠ shadcn 安装失败: %v (继续...)"
 ui_add_ok: "✓ 已安装 %s@%s"
 
 # ui update
@@ -269,3 +271,11 @@ common_lock_not_found: "gve.lock 未找到 — 请确认在 GVE 项目目录中"
 pkg_pnpm_fallback: "  ⚠ pnpm install 失败，回退到 npm..."
 pkg_npm_fail: "npm install 在 %s 中失败"
 pkg_none_available: "pnpm 和 npm 均不可用。请安装 pnpm (npm install -g pnpm) 或 npm (https://nodejs.org)"
+
+# registry
+registry_short: "管理资产库 registry"
+registry_build_short: "扫描目录，生成 registry.json"
+registry_build_scanning: "扫描 %s..."
+registry_build_warn: "  ⚠ %s"
+registry_build_ok: "✓ 已生成 registry.json (%s)"
+registry_build_invalid_category: "无效的 category: %q，可选: scaffold, ui, components, hooks"

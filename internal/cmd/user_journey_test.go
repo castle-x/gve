@@ -3,11 +3,13 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/castle-x/gve/internal/asset"
+	"github.com/castle-x/gve/internal/config"
 	"github.com/castle-x/gve/internal/lock"
 )
 
@@ -117,6 +119,38 @@ func setupProject(t *testing.T, _ string) string {
 	os.MkdirAll(filepath.Join(siteDir, "src", "shared", "wk", "components"), 0755)
 
 	return projectDir
+}
+
+// initGitRepo initializes a real git repo in dir with a local bare remote,
+// so that EnsureCache's "git pull --ff-only" succeeds.
+func initGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	// Create a bare repo to serve as the "remote"
+	bareDir := filepath.Join(t.TempDir(), "bare.git")
+	for _, args := range [][]string{
+		{"init", "--bare", bareDir},
+	} {
+		cmd := exec.Command("git", args...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	// Initialize the actual repo
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.email", "test@test.com"},
+		{"config", "user.name", "Test"},
+		{"add", "."},
+		{"commit", "-m", "init"},
+		{"remote", "add", "origin", bareDir},
+		{"push", "-u", "origin", "master"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+		}
+	}
 }
 
 // chdir changes to dir for the duration of the test.
@@ -803,6 +837,107 @@ func TestAPIInstall_NonexistentResource(t *testing.T) {
 	}
 }
 
+// ─── Test: initFrontend with versioned defaultAssets ─────────────────
+
+func TestInitWithVersionedDefaultAssets(t *testing.T) {
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	uiDir := filepath.Join(cacheDir, "ui")
+
+	// Create scaffold with versioned defaultAssets
+	scaffoldDir := filepath.Join(uiDir, "scaffold", "dashboard-02", "v1.0.0")
+	os.MkdirAll(scaffoldDir, 0755)
+	writeTestMeta(t, scaffoldDir, asset.Meta{
+		Name: "dashboard-02", Version: "1.0.0", Category: "scaffold", Dest: "site",
+		Files:         []string{"package.json"},
+		DefaultAssets: []string{"ui/button@1.0.0"},
+	})
+	os.WriteFile(filepath.Join(scaffoldDir, "package.json"), []byte(`{"name":"__PROJECT_NAME__","dependencies":{}}`), 0644)
+
+	// Create ui/button v1.0.0
+	btnDir := filepath.Join(uiDir, "ui", "button", "v1.0.0")
+	os.MkdirAll(btnDir, 0755)
+	writeTestMeta(t, btnDir, asset.Meta{
+		Name: "button", Version: "1.0.0", Category: "ui",
+		Files: []string{"button.tsx"},
+	})
+	os.WriteFile(filepath.Join(btnDir, "button.tsx"), []byte("export const Button = () => <button/>;\n"), 0644)
+
+	// Also create ui/button v1.1.0 (latest) — should NOT be installed
+	btn11Dir := filepath.Join(uiDir, "ui", "button", "v1.1.0")
+	os.MkdirAll(btn11Dir, 0755)
+	writeTestMeta(t, btn11Dir, asset.Meta{
+		Name: "button", Version: "1.1.0", Category: "ui",
+		Files: []string{"button.tsx"},
+	})
+	os.WriteFile(filepath.Join(btn11Dir, "button.tsx"), []byte("export const Button = ({variant}) => <button/>;\n"), 0644)
+
+	// Write registry
+	uiReg := asset.Registry{
+		"scaffold/dashboard-02": {Latest: "1.0.0", Versions: map[string]asset.VersionEntry{
+			"1.0.0": {Path: "scaffold/dashboard-02/v1.0.0"},
+		}},
+		"ui/button": {Latest: "1.1.0", Versions: map[string]asset.VersionEntry{
+			"1.0.0": {Path: "ui/button/v1.0.0"},
+			"1.1.0": {Path: "ui/button/v1.1.0"},
+		}},
+	}
+	writeTestJSON(t, filepath.Join(uiDir, "registry.json"), uiReg)
+	// Initialize a real git repo so EnsureCache's git pull succeeds
+	initGitRepo(t, uiDir)
+
+	// Setup project
+	projectDir := t.TempDir()
+
+	// Create gve.lock and site/package.json
+	lf := lock.New("fake-ui-registry", "fake-api-registry")
+	if err := lf.Save(filepath.Join(projectDir, "gve.lock")); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		CacheDir:    cacheDir,
+		UIRegistry:  "fake-ui-registry",
+		APIRegistry: "fake-api-registry",
+	}
+
+	// Run initFrontend
+	err := initFrontend(projectDir, "test-app", cfg, "scaffold/dashboard-02")
+	if err != nil {
+		t.Fatalf("initFrontend failed: %v", err)
+	}
+
+	// Verify button was installed at v1.0.0 (pinned), not v1.1.0 (latest)
+	btnFile := filepath.Join(projectDir, "site", "src", "shared", "wk", "ui", "button.tsx")
+	data, err := os.ReadFile(btnFile)
+	if err != nil {
+		t.Fatalf("button.tsx not installed: %v", err)
+	}
+	if strings.Contains(string(data), "variant") {
+		t.Error("button.tsx should be v1.0.0 content (no 'variant'), not v1.1.0")
+	}
+
+	// Verify gve.lock stores bare key without @version
+	lf, err = lock.Load(filepath.Join(projectDir, "gve.lock"))
+	if err != nil {
+		t.Fatalf("load gve.lock: %v", err)
+	}
+
+	// Check the key is "ui/button", not "ui/button@1.0.0"
+	v, ok := lf.GetUIAsset("ui/button")
+	if !ok {
+		t.Fatal("ui/button not in gve.lock — key may contain @version suffix")
+	}
+	if v != "1.0.0" {
+		t.Errorf("lock version = %q, want 1.0.0", v)
+	}
+
+	// Ensure no entry with @version key
+	_, bad := lf.GetUIAsset("ui/button@1.0.0")
+	if bad {
+		t.Error("gve.lock should NOT have key 'ui/button@1.0.0'")
+	}
+}
+
 // ─── Test: Diff after file deletion (added status) ───────────────────
 
 func TestDiffAsset_DeletedFile(t *testing.T) {
@@ -836,4 +971,95 @@ func TestDiffAsset_DeletedFile(t *testing.T) {
 	if !found {
 		t.Error("expected button.tsx to be marked as deleted")
 	}
+}
+
+// ─── Test: collectShadcnDeps ─────────────────────────────────────────
+
+func TestCollectShadcnDeps(t *testing.T) {
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	uiDir := filepath.Join(cacheDir, "ui")
+
+	// Create a component with shadcnDeps
+	dialogDir := filepath.Join(uiDir, "components", "my-dialog", "v1.0.0")
+	os.MkdirAll(dialogDir, 0755)
+	writeTestMeta(t, dialogDir, asset.Meta{
+		Name: "my-dialog", Version: "1.0.0", Category: "component",
+		Files:      []string{"my-dialog.tsx"},
+		ShadcnDeps: []string{"button", "dialog"},
+	})
+	os.WriteFile(filepath.Join(dialogDir, "my-dialog.tsx"), []byte("export const MyDialog = () => null;\n"), 0644)
+
+	// Create a peerDep with its own shadcnDeps
+	hookDir := filepath.Join(uiDir, "ui", "use-something", "v1.0.0")
+	os.MkdirAll(hookDir, 0755)
+	writeTestMeta(t, hookDir, asset.Meta{
+		Name: "use-something", Version: "1.0.0", Category: "ui",
+		Files:      []string{"use-something.ts"},
+		ShadcnDeps: []string{"dialog", "tooltip"}, // dialog overlaps with main
+	})
+	os.WriteFile(filepath.Join(hookDir, "use-something.ts"), []byte("export function useSomething() {}\n"), 0644)
+
+	// Write registry
+	reg := asset.Registry{
+		"components/my-dialog": {Latest: "1.0.0", Versions: map[string]asset.VersionEntry{
+			"1.0.0": {Path: "components/my-dialog/v1.0.0"},
+		}},
+		"ui/use-something": {Latest: "1.0.0", Versions: map[string]asset.VersionEntry{
+			"1.0.0": {Path: "ui/use-something/v1.0.0"},
+		}},
+	}
+	writeTestJSON(t, filepath.Join(uiDir, "registry.json"), reg)
+	os.MkdirAll(filepath.Join(uiDir, ".git"), 0755)
+
+	mgr := asset.NewManager(cacheDir)
+	projectDir := setupProject(t, cacheDir)
+
+	t.Run("collects and deduplicates shadcnDeps", func(t *testing.T) {
+		deps := collectShadcnDeps(mgr, "components/my-dialog", []string{"ui/use-something"}, projectDir)
+		// Should have button, dialog, tooltip (no duplicates)
+		if len(deps) != 3 {
+			t.Errorf("expected 3 shadcn deps, got %d: %v", len(deps), deps)
+		}
+		depSet := make(map[string]bool)
+		for _, d := range deps {
+			depSet[d] = true
+		}
+		for _, expected := range []string{"button", "dialog", "tooltip"} {
+			if !depSet[expected] {
+				t.Errorf("expected %q in deps, got %v", expected, deps)
+			}
+		}
+	})
+
+	t.Run("filters out existing shadcn components", func(t *testing.T) {
+		// Create an existing shadcn component file
+		shadcnDir := filepath.Join(projectDir, "site", "src", "shared", "shadcn")
+		os.MkdirAll(shadcnDir, 0755)
+		os.WriteFile(filepath.Join(shadcnDir, "button.tsx"), []byte("// existing\n"), 0644)
+
+		deps := collectShadcnDeps(mgr, "components/my-dialog", nil, projectDir)
+		// button already exists, so only dialog should remain
+		depSet := make(map[string]bool)
+		for _, d := range deps {
+			depSet[d] = true
+		}
+		if depSet["button"] {
+			t.Error("button should be filtered out (already exists)")
+		}
+		if !depSet["dialog"] {
+			t.Error("dialog should be in the list")
+		}
+	})
+
+	t.Run("returns nil for asset without shadcnDeps", func(t *testing.T) {
+		// ui/button from setupFakeAssetCache has no shadcnDeps
+		cacheDir2 := setupFakeAssetCache(t)
+		mgr2 := asset.NewManager(cacheDir2)
+		projectDir2 := setupProject(t, cacheDir2)
+
+		deps := collectShadcnDeps(mgr2, "ui/button", nil, projectDir2)
+		if len(deps) != 0 {
+			t.Errorf("expected 0 shadcn deps for button, got %d: %v", len(deps), deps)
+		}
+	})
 }

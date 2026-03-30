@@ -81,10 +81,33 @@ var v2Categories = []string{"scaffold", "ui", "components", "hooks"}
 // BuildRegistryV2 scans the four category directories and builds a v2 Registry.
 // Returns the registry and any warnings (CSS in ui/components, category mismatch).
 func BuildRegistryV2(rootDir string) (Registry, []string, error) {
+	return BuildRegistryV2Filtered(rootDir, v2Categories)
+}
+
+// BuildRegistryV2Filtered scans only the specified category directories and builds a v2 Registry.
+// If the rootDir contains an existing registry.json, entries for non-selected categories are preserved.
+func BuildRegistryV2Filtered(rootDir string, categories []string) (Registry, []string, error) {
 	reg := make(Registry)
+
+	// Load existing registry to preserve entries for non-selected categories
+	existingPath := filepath.Join(rootDir, "registry.json")
+	if existing, err := LoadRegistry(existingPath); err == nil {
+		// Copy entries whose category is NOT in the selected set
+		selected := make(map[string]bool, len(categories))
+		for _, c := range categories {
+			selected[c] = true
+		}
+		for key, info := range existing {
+			parts := strings.SplitN(key, "/", 2)
+			if len(parts) == 2 && !selected[parts[0]] {
+				reg[key] = info
+			}
+		}
+	}
+
 	var warnings []string
 
-	for _, category := range v2Categories {
+	for _, category := range categories {
 		catDir := filepath.Join(rootDir, category)
 		entries, err := os.ReadDir(catDir)
 		if err != nil {

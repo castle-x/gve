@@ -241,6 +241,78 @@ func TestBuildRegistryV2_EmptyDirs(t *testing.T) {
 	}
 }
 
+func TestBuildRegistryV2Filtered(t *testing.T) {
+	dir := t.TempDir()
+
+	// ui/spinner/v1.0.0
+	d := filepath.Join(dir, "ui", "spinner", "v1.0.0")
+	os.MkdirAll(d, 0755)
+	writeMeta(t, d, "spinner", "1.0.0", "ui")
+	os.WriteFile(filepath.Join(d, "spinner.tsx"), []byte("export const Spinner = () => null"), 0644)
+
+	// components/data-table/v2.0.0
+	d = filepath.Join(dir, "components", "data-table", "v2.0.0")
+	os.MkdirAll(d, 0755)
+	writeMeta(t, d, "data-table", "2.0.0", "component")
+	os.WriteFile(filepath.Join(d, "data-table.tsx"), []byte("export const DataTable = () => null"), 0644)
+
+	// Build only components
+	reg, warnings, err := BuildRegistryV2Filtered(dir, []string{"components"})
+	if err != nil {
+		t.Fatalf("BuildRegistryV2Filtered: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("unexpected warnings: %v", warnings)
+	}
+
+	// Should have only components
+	if _, ok := reg["components/data-table"]; !ok {
+		t.Error("expected components/data-table in filtered registry")
+	}
+	if _, ok := reg["ui/spinner"]; ok {
+		t.Error("ui/spinner should not be in filtered registry (only components selected)")
+	}
+}
+
+func TestBuildRegistryV2Filtered_MergeWithExisting(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write an existing registry.json with ui/spinner
+	existingReg := Registry{
+		"ui/spinner": {Latest: "1.0.0", Versions: map[string]VersionEntry{"1.0.0": {Path: "ui/spinner/v1.0.0"}}},
+	}
+	existingPath := filepath.Join(dir, "registry.json")
+	if err := WriteRegistryV2(existingReg, existingPath); err != nil {
+		t.Fatalf("WriteRegistryV2 existing: %v", err)
+	}
+
+	// Create components/data-table/v2.0.0 on disk
+	d := filepath.Join(dir, "components", "data-table", "v2.0.0")
+	os.MkdirAll(d, 0755)
+	writeMeta(t, d, "data-table", "2.0.0", "component")
+	os.WriteFile(filepath.Join(d, "data-table.tsx"), []byte("export const DataTable = () => null"), 0644)
+
+	// Build only components — ui entries should be preserved from existing
+	reg, _, err := BuildRegistryV2Filtered(dir, []string{"components"})
+	if err != nil {
+		t.Fatalf("BuildRegistryV2Filtered: %v", err)
+	}
+
+	// ui/spinner should be preserved from existing registry
+	if _, ok := reg["ui/spinner"]; !ok {
+		t.Error("ui/spinner should be preserved from existing registry")
+	}
+
+	// components/data-table should be freshly built
+	if _, ok := reg["components/data-table"]; !ok {
+		t.Error("components/data-table should be in rebuilt registry")
+	}
+
+	if len(reg) != 2 {
+		t.Errorf("expected 2 entries, got %d", len(reg))
+	}
+}
+
 func TestWriteRegistryV2(t *testing.T) {
 	dir := t.TempDir()
 	reg := Registry{

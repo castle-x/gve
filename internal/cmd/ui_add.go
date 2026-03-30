@@ -96,6 +96,16 @@ func runUIAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save gve.lock: %w", err)
 	}
 
+	// Collect and install shadcn dependencies from the main asset and its peerDeps
+	shadcnNeeded := collectShadcnDeps(mgr, fullName, peerDeps, projectDir)
+	if len(shadcnNeeded) > 0 {
+		siteDir := filepath.Join(projectDir, "site")
+		fmt.Println(i18n.Tf("ui_add_shadcn", strings.Join(shadcnNeeded, ", ")))
+		if err := installShadcnComponents(siteDir, shadcnNeeded); err != nil {
+			fmt.Println(i18n.Tf("ui_add_shadcn_warn", err))
+		}
+	}
+
 	// Auto-run npm install if new deps were injected
 	if depsInjected {
 		siteDir := filepath.Join(projectDir, "site")
@@ -138,4 +148,56 @@ func findProjectRoot() (string, error) {
 	}
 
 	return "", fmt.Errorf("%s", i18n.T("common_lock_not_found"))
+}
+
+// collectShadcnDeps gathers shadcnDeps from the main asset and its peerDeps,
+// deduplicates them, and filters out components that already exist in the project.
+func collectShadcnDeps(mgr *asset.Manager, mainAsset string, peerDeps []string, projectDir string) []string {
+	seen := make(map[string]bool)
+	var allDeps []string
+
+	// Helper to load meta and collect shadcnDeps
+	collectFrom := func(assetName string) {
+		reg, err := mgr.GetRegistry("ui")
+		if err != nil {
+			return
+		}
+		_, assetPath, err := reg.GetLatest(assetName)
+		if err != nil {
+			return
+		}
+		metaPath := filepath.Join(mgr.GetAssetDir("ui", assetPath), "meta.json")
+		meta, err := asset.LoadMeta(metaPath)
+		if err != nil {
+			return
+		}
+		for _, dep := range meta.ShadcnDeps {
+			if !seen[dep] {
+				seen[dep] = true
+				allDeps = append(allDeps, dep)
+			}
+		}
+	}
+
+	collectFrom(mainAsset)
+	for _, dep := range peerDeps {
+		collectFrom(dep)
+	}
+
+	// Filter out already-existing shadcn components
+	shadcnDir := filepath.Join(projectDir, "site", "src", "shared", "shadcn")
+	var needed []string
+	for _, dep := range allDeps {
+		// Check if the shadcn component directory or file exists
+		dirPath := filepath.Join(shadcnDir, dep)
+		filePath := filepath.Join(shadcnDir, dep+".tsx")
+		if _, err := os.Stat(dirPath); err == nil {
+			continue
+		}
+		if _, err := os.Stat(filePath); err == nil {
+			continue
+		}
+		needed = append(needed, dep)
+	}
+	return needed
 }

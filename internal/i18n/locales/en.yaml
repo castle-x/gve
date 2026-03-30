@@ -130,6 +130,8 @@ ui_add_peer_fail: "  → peerDep %s: failed: %v"
 ui_add_peer_ok: "  → peerDep %s: installed v%s"
 ui_add_npm_detect: "  New npm dependencies detected, running install..."
 ui_add_npm_warn: "  ⚠ npm install failed: %v"
+ui_add_shadcn: "  Installing shadcn dependencies: %s"
+ui_add_shadcn_warn: "  ⚠ shadcn install failed: %v (continuing...)"
 ui_add_ok: "✓ Installed %s@%s"
 
 # ui update
@@ -269,3 +271,11 @@ common_lock_not_found: "gve.lock not found — are you inside a GVE project?"
 pkg_pnpm_fallback: "  ⚠ pnpm install failed, falling back to npm..."
 pkg_npm_fail: "npm install failed in %s"
 pkg_none_available: "neither pnpm nor npm is available or working. Please install pnpm (npm install -g pnpm) or npm (https://nodejs.org)"
+
+# registry
+registry_short: "Manage asset registry"
+registry_build_short: "Scan directories and generate registry.json"
+registry_build_scanning: "Scanning %s..."
+registry_build_warn: "  ⚠ %s"
+registry_build_ok: "✓ Generated registry.json (%s)"
+registry_build_invalid_category: "invalid category: %q, available: scaffold, ui, components, hooks"

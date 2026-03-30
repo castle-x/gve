@@ -24,6 +24,12 @@ func (m *Manager) EnsureCache(registryURL, subDir string) error {
 
 	gitDir := filepath.Join(cacheDir, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
+		// Discard any local changes in cache before pulling
+		reset := exec.Command("git", "-C", cacheDir, "reset", "--hard")
+		reset.Stdout = os.Stdout
+		reset.Stderr = os.Stderr
+		_ = reset.Run()
+
 		cmd := exec.Command("git", "-C", cacheDir, "pull", "--ff-only")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr

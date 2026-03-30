@@ -104,11 +104,27 @@ func initFrontend(projectDir, projectName string, cfg *config.Config, scaffoldKe
 		return fmt.Errorf("npm install: %w", err)
 	}
 
-	// Install shadcn components if specified
+	// Install shadcn components if specified (skip those already provided by scaffold)
 	if len(meta.ShadcnDeps) > 0 {
-		fmt.Println(i18n.Tf("init_fe_shadcn", strings.Join(meta.ShadcnDeps, ", ")))
-		if err := installShadcnComponents(siteDir, meta.ShadcnDeps); err != nil {
-			fmt.Println(i18n.Tf("init_fe_shadcn_warn", err))
+		shadcnDir := filepath.Join(siteDir, "src", "shared", "shadcn")
+		var toInstall []string
+		var skipped []string
+		for _, comp := range meta.ShadcnDeps {
+			compPath := filepath.Join(shadcnDir, comp+".tsx")
+			if _, err := os.Stat(compPath); os.IsNotExist(err) {
+				toInstall = append(toInstall, comp)
+			} else {
+				skipped = append(skipped, comp)
+			}
+		}
+		if len(skipped) > 0 {
+			fmt.Println(i18n.Tf("init_fe_shadcn_skip", strings.Join(skipped, ", ")))
+		}
+		if len(toInstall) > 0 {
+			fmt.Println(i18n.Tf("init_fe_shadcn", strings.Join(toInstall, ", ")))
+			if err := installShadcnComponents(siteDir, toInstall); err != nil {
+				fmt.Println(i18n.Tf("init_fe_shadcn_warn", err))
+			}
 		}
 	}
 

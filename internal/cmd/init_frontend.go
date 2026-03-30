@@ -266,10 +266,29 @@ func replaceInFile(path, old, new string) error {
 
 // installShadcnComponents installs shadcn components using npx.
 // Falls back to pnpm dlx if npx is not available.
+// Uses --overwrite to avoid interactive prompts from transitive deps,
+// but backs up and restores any existing .tsx files so custom shadcn
+// components (e.g. from scaffolds) are not lost.
 func installShadcnComponents(siteDir string, components []string) error {
-	args := append([]string{"shadcn@latest", "add"}, components...)
-	args = append(args, "--yes")
+	shadcnDir := filepath.Join(siteDir, "src", "shared", "shadcn")
 
+	// Backup existing .tsx files before shadcn --overwrite clobbers them
+	backups := make(map[string][]byte)
+	entries, _ := os.ReadDir(shadcnDir)
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".tsx" {
+			continue
+		}
+		p := filepath.Join(shadcnDir, e.Name())
+		if data, err := os.ReadFile(p); err == nil {
+			backups[p] = data
+		}
+	}
+
+	args := append([]string{"shadcn@latest", "add"}, components...)
+	args = append(args, "--yes", "--overwrite")
+
+	var installErr error
 	// Try npx first
 	if _, err := exec.LookPath("npx"); err == nil {
 		cmd := exec.Command("npx", args...)
@@ -277,7 +296,10 @@ func installShadcnComponents(siteDir string, components []string) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err == nil {
+			restoreBackups(backups)
 			return nil
+		} else {
+			installErr = err
 		}
 	}
 
@@ -291,8 +313,19 @@ func installShadcnComponents(siteDir string, components []string) error {
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("pnpm dlx shadcn failed: %w", err)
 		}
+		restoreBackups(backups)
 		return nil
 	}
 
+	if installErr != nil {
+		return installErr
+	}
 	return fmt.Errorf("neither npx nor pnpm is available for shadcn install")
+}
+
+// restoreBackups writes back previously saved file contents.
+func restoreBackups(backups map[string][]byte) {
+	for p, data := range backups {
+		_ = os.WriteFile(p, data, 0644)
+	}
 }

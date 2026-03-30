@@ -20,7 +20,7 @@ GVE 是一个 Go + Vite + embed 全栈脚手架，包含三个仓库：
 ```bash
 # 项目初始化
 gve init <project-name>           # 生成 Go 骨架 + scaffold 前端 + 自动 pnpm install
-gve init <name> --scaffold dashboard  # 指定骨架模板（默认 default）
+gve init <name> --scaffold dashboard  # 指定骨架模板（默认 default, 可选 dashboard-01, dashboard-02）
 
 # 日常开发
 gve dev                           # 并发启动 Air (Go) + Vite (前端)，自动检测 pnpm/npm，自动传递 VITE_BACKEND_TARGET
@@ -208,7 +208,7 @@ gve dev                            # 直接可运行，无需手动 pnpm install
 3. 拉取 wk-ui registry → 选择 scaffold → 复制前端文件 + placeholder 目录
 4. 品牌名替换（`__PROJECT_NAME__` → 实际项目名，递归扫描 `site/src/` 下所有 `.ts/.tsx/.js/.jsx/.json/.html` 文件）
 5. 自动 `pnpm install`（pnpm 不可用时降级 npm）
-6. 安装 scaffold 声明的 shadcn 组件（`meta.shadcnDeps`，使用 `--overwrite` 避免交互提示）
+6. 安装 scaffold 声明的 shadcn 组件（`meta.shadcnDeps`）：跳过骨架已自带定制版的组件，对剩余组件使用 `npx shadcn add --overwrite`，安装前备份已有 `.tsx` 文件、安装后恢复（防止传递依赖覆盖定制文件）
 7. 安装 scaffold 声明的 wk 默认组件（`meta.defaultAssets`）+ 递归 peerDeps
 8. 再次 `pnpm install`（刷新新注入的 npm deps）
 9. 更新 gve.lock
@@ -349,7 +349,7 @@ gve api push ai-worker/task --dry-run          # 预览模式
 | `peerDeps` | 否 | wk-ui 内部组件间依赖（registry key，如 `"ui/button"`），安装时**递归**解析（BFS，最大深度 5） |
 | `files` | 是 | 需复制的文件列表。**ui/ 和 components/ 禁止 .css 文件** |
 | `defaultAssets` | 否 | **scaffold 专用**：骨架默认安装的 wk 组件 key 列表（如 `["ui/spinner"]`） |
-| `shadcnDeps` | 否 | **scaffold 专用**：骨架依赖的 shadcn 组件名列表（如 `["button", "card", "sidebar"]`） |
+| `shadcnDeps` | 否 | **scaffold 专用**：骨架依赖的 shadcn 组件名列表（如 `["button", "card", "sidebar"]`）。骨架可在 files 中自带定制版 shadcn 文件，`gve init` 会跳过已有组件，只安装缺失的 |
 
 ### 安装路径映射
 

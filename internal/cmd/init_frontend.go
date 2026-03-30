@@ -268,7 +268,7 @@ func replaceInFile(path, old, new string) error {
 // Falls back to pnpm dlx if npx is not available.
 func installShadcnComponents(siteDir string, components []string) error {
 	args := append([]string{"shadcn@latest", "add"}, components...)
-	args = append(args, "--yes", "--overwrite")
+	args = append(args, "--yes")
 
 	// Try npx first
 	if _, err := exec.LookPath("npx"); err == nil {

@@ -247,6 +247,26 @@ gve ui push data-table --dry-run
 gve ui push my-comp --source ./custom/path/ --version 1.0.0
 ```
 
+#### 在非 gve init 项目中使用 gve ui push
+
+`gve ui push` 依赖 `gve.lock` 定位项目根目录，非 `gve init` 创建的项目（如纯前端项目）需要手动在项目根目录创建最小 `gve.lock`：
+
+```json
+{
+  "version": "2",
+  "ui": {
+    "registry": "https://github.com/castle-x/wk-ui.git",
+    "assets": {}
+  }
+}
+```
+
+然后用 `--source` 指定组件源目录（因为默认查找路径为 `site/src/shared/wk/`，纯前端项目可能不一致）：
+
+```bash
+gve ui push spinner --source ./src/shared/wk/ui/spinner --version 1.0.0
+```
+
 **TSX Import 扫描器**会自动：
 - 识别 npm 依赖（如 `class-variance-authority`、`@tanstack/react-table`）→ 写入 meta.json `deps`
 - 识别 wk-ui 内部组件依赖（如 `@/shared/wk/ui/spinner`）→ 写入 meta.json `peerDeps`

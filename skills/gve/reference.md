@@ -49,6 +49,7 @@ wk-ui/
 │   ├── spinner/
 │   │   └── v1.0.0/
 │   │       ├── meta.json
+│   │       ├── README.md              # 使用说明（Props、用法、变体）
 │   │       └── spinner.tsx            # 纯 .tsx，禁止 .css
 │   ├── input-group/
 │   │   └── v1.0.0/
@@ -194,10 +195,12 @@ cat > ui/my-component/v1.0.0/meta.json << 'EOF'
 }
 EOF
 
-# 4. 更新 registry.json
+# 4. 编写 README.md 使用说明（Props、基础用法、CVA 变体）
+
+# 5. 更新 registry.json
 gve registry build
 
-# 5. 提交
+# 6. 提交
 git add ui/my-component/ registry.json
 git commit -m "feat(ui): add ui/my-component v1.0.0"
 ```
@@ -235,10 +238,12 @@ cat > components/my-widget/v1.0.0/meta.json << 'EOF'
 }
 EOF
 
-# 4. 更新 registry.json
+# 4. 编写 README.md 使用说明（Props、基础用法、CVA 变体、peerDeps 说明）
+
+# 5. 更新 registry.json
 gve registry build
 
-# 5. 提交
+# 6. 提交
 git add components/my-widget/ registry.json
 git commit -m "feat(components): add components/my-widget v1.0.0"
 ```

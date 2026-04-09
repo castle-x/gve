@@ -75,6 +75,7 @@ wk-ui/
 │   ├── spinner/
 │   │   └── v1.0.0/
 │   │       ├── meta.json
+│   │       ├── README.md              # 使用说明（Props、用法、变体）
 │   │       └── spinner.tsx            # 纯 .tsx，禁止 .css
 │   └── input-group/
 │       └── v1.0.0/
@@ -252,13 +253,16 @@ gve ui push my-comp --source ./custom/path/ --version 1.0.0
 - 跳过相对路径、项目别名（`@/`）、静态资源（.css/.svg）、React 宿主依赖
 - 自动去除注释中的 import（block comment + line comment）
 
+> **AI 辅助发布时**：在执行 `gve ui push` 前，须在版本目录中生成 `README.md` 使用说明（参见「组件使用说明」章节）。
+
 ### 发布 UI 资产（手动方式，在 wk-ui 仓库）
 
 > 仅在无法使用 `gve ui push` 时使用。
 1. 创建 `{category}/{name}/v{x.y.z}/` 目录（如 `ui/spinner/v1.1.0/`）
 2. 编写 `meta.json` + 资产文件（仅 `.tsx`，禁止 `.css`）
-3. 执行 `gve registry build` 更新 registry.json
-4. `git add . && git commit`
+3. 编写 `README.md` 使用说明（参见「组件使用说明」章节）
+4. 执行 `gve registry build` 更新 registry.json
+5. `git add . && git commit`
 
 ### 发布 API 契约新版本（推荐：gve api push）
 
@@ -359,6 +363,66 @@ gve api push ai-worker/task --dry-run          # 预览模式
 | `ui` | `site/src/shared/wk/ui/` | `shared/wk/ui/spinner.tsx` |
 | `component` | `site/src/shared/wk/components/` | `shared/wk/components/data-table.tsx` |
 | `global` | 由 dest 指定 | `site/src/app/styles/globals.css` |
+
+### 组件使用说明（README.md）
+
+通过 AI 生成或发布 wk-ui 组件时，**必须**在版本目录内同时生成 `README.md` 使用说明文件。
+
+**位置**：`{category}/{name}/v{x.y.z}/README.md`（与 `meta.json` 同级）
+
+**必含内容**：
+
+1. **组件简介**：一句话说明用途
+2. **安装方式**：`gve ui add {category}/{name}`
+3. **Props 接口**：列出所有 Props 及类型、是否必填、默认值
+4. **基础用法**：最小可运行的代码示例
+5. **CVA 变体**（如有）：列出所有 variants 及其可选值，附代码示例
+6. **peerDeps 说明**（如有）：依赖的其他 wk-ui 组件
+
+**模板示例**：
+
+````markdown
+# Spinner
+
+旋转加载指示器，支持多种尺寸变体。
+
+## 安装
+
+```bash
+gve ui add ui/spinner
+```
+
+## Props
+
+| Prop | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `size` | `"sm" \| "md" \| "lg"` | 否 | `"md"` | 尺寸变体 |
+| `className` | `string` | 否 | — | 自定义类名 |
+
+## 基础用法
+
+```tsx
+import { Spinner } from "@/shared/wk/ui/spinner"
+
+<Spinner />
+<Spinner size="lg" />
+```
+
+## 变体
+
+| 变体 | 值 | 效果 |
+|------|-----|------|
+| `size` | `sm` | 16×16 |
+| `size` | `md` | 24×24（默认） |
+| `size` | `lg` | 32×32 |
+````
+
+**规则**：
+- README.md **不列入** `meta.json` 的 `files` 字段（不会被 `gve ui add` 复制到项目中）
+- README.md 使用中文撰写
+- Props 表格从组件源码的 TypeScript 接口/类型定义中提取，确保与实际代码一致
+- 如果组件使用了 `cva()`，必须列出所有 variants 及其 `defaultVariants`
+- 如果 `meta.json` 声明了 `peerDeps`，在说明中提示用户这些组件会被自动安装
 
 ### 样式硬约束
 
